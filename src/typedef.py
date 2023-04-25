@@ -11,24 +11,40 @@ import numpy as np
 import h5py
 
 class Polarizability:
-    def __init__(self):
+    def __init__(self
+        ,alat = None
+        ,blat = None
+        ,avec = None
+        ,bvec = None
+        ,avec_bohr    = None
+        ,bvec_bohr    = None
+        ,components = None
+        ,nq   = None
+        ,qpts_crys = None
+        ,qpts_bohr = None
+        ,nmtx = None
+        ,gind_eps2rho = None
+        ,matrix = None
+        ,matrix_diag = None):
         ### Reading mf_header part ###
-        self.alat = None
-        self.blat = None
-        self.avec = None
-        self.bvec = None
-        self.avec_bohr    = None
-        self.bvec_bohr    = None
-        self.components = None
-        self.nq   = None
-        self.qpts_crys = None
-        self.qpts_bohr = None
-        self.nmtx = None
-        self.gind_eps2rho = None
-        self.matrix = None
+        self.alat =              alat
+        self.blat =              blat
+        self.avec =              avec
+        self.bvec =              bvec
+        self.avec_bohr    =      avec_bohr
+        self.bvec_bohr    =      bvec_bohr
+        self.components =        components
+        self.nq   =              nq
+        self.qpts_crys =         qpts_crys
+        self.qpts_bohr =         qpts_bohr
+        self.nmtx =              nmtx
+        self.gind_eps2rho =      gind_eps2rho
+        self.matrix =            matrix
+        self.matrix_diag =       matrix_diag
         return None
 
-    def from_hdf5(self, fn_chimat):
+    @classmethod
+    def from_hdf5(cls, fn_chimat):
         ### Reading from hdf5 file ###
         self.chimat_h5 = h5py.File(fn_chimat, 'r')
 
