@@ -15,7 +15,7 @@ Written by W. Kim  Apr. 20. 2023
 woochang_kim@berkeley.edu
 """
 import os
-os.sys.path.append("/scratch1/08702/wkim94/Chi-folding/src")
+os.sys.path.append("../../../src/")
 import numpy as np
 import h5py
 from scipy.spatial import KDTree
@@ -24,6 +24,8 @@ from typedef import Polarizability
 def main():
     sc_eps_path = '../sc/3.1-chi/'
     uc_eps_path = '../uc/3.1-chi/'
+    chi0_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'./chi0mat.h5')
+    chi0_uc = Polarizability.from_hdf5(fn_chimat=uc_eps_path+'./chi0mat.h5')
     chi_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'./chimat.h5')
     chi_uc = Polarizability.from_hdf5(fn_chimat=uc_eps_path+'./chimat.h5')
     #kuc_map_crys : real(nqsc, size_sc, 3)
@@ -33,28 +35,61 @@ def main():
     #tree  = KDTree(qpts_uc)
     #quc_map_iq   = np.zeros((nqsc, sc_size),dtype=np.int32)
     #_, iquc = tree.query(quc_map_crys[1,:,:],k=1,distance_upper_bound=1e-9)
-    simple_hard_coding()
+    simple_hard_coding(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
     #print(_)
     #print(iquc)
     #qucG2qscg = get_qucG2qscg(chi_sc, chi_uc)
-    exit()
-
     return None
 
 
 
-def simple_hard_coding():
+def simple_hard_coding(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_crys):
     """
-    From Chi(iquc=6), find equivalent elements in Chi(iqsc=1)
+    From Chi(iquc_global=7), find equivalent elements in Chi(iqsc_global=1)
 
     """
-    chi_iq_6 = chi_uc.get_mat_iq(iq=6)
-    print(chi_iq_6.shape)
+    # UC
+    iquc_l = 6
+    uc_gind_eps2rho = chi_uc.gind_eps2rho
+    print(chi_uc.components[chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]]-1])
+    chimat_uc = chi_uc.get_mat_iq(iq=iquc_l)
 
-
-
-
-
+    # SC
+    iqsc_l = 0
+    tree = KDTree(chi_sc.components[chi_sc.gind_eps2rho[iqsc_l,0:chi_sc.nmtx[iqsc_l]]-1])
+    #tree = KDTree(chi_sc.components[chi_sc.gind_eps2rho[iqsc_l,0:chi_sc.nmtx[iqsc_l]]-1]@chi_sc.bvec_bohr)
+    #print('blat', hi_sc.blat)
+    print('chi_sc.components[chi_sc.gind_eps2rho[iqsc_l,0:chi_sc.nmtx[iqsc_l]]-1]')
+    print(chi_sc.components[chi_sc.gind_eps2rho[iqsc_l,0:chi_sc.nmtx[iqsc_l]]-1])
+    chimat_sc = chi_sc.get_mat_iq(iq=iqsc_l)
+    qucG2qscg = np.empty((len(chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]])),dtype=np.int32)
+    for iGuc, hkl_uc in enumerate(chi_uc.components[chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]]-1]):
+        #print(iGuc,hkl_uc)
+        Guc_bohr = hkl_uc@chi_uc.bvec_bohr
+        print('\n')
+        print(hkl_uc)
+        print('chimat_uc[iGuc,iGuc]')
+        print(chimat_uc[iGuc,iGuc])
+        #print(chi_uc.qpts_bohr[iquc_l])
+        #print(chi_sc.qpts_bohr[iqsc_l])
+        #print(chi_uc.qpts_bohr[iquc_l]-chi_sc.qpts_bohr[iqsc_l])
+        gsc_bohr = Guc_bohr+chi_uc.qpts_bohr[iquc_l]-chi_sc.qpts_bohr[iqsc_l]
+        gsc_crys = gsc_bohr@np.linalg.inv(chi_sc.bvec_bohr)
+        print('gsc_crys:', gsc_crys)
+        dist, igsc = tree.query([gsc_crys],k=1)
+        #print(dist)
+        if dist[0] < 1e-9:
+            print('dist[0]',dist[0])
+            print('igsc[0]',igsc[0])
+            igsc = igsc[0]
+            print('chimat_sc[igsc,igsc]')
+            print(chimat_sc[igsc,igsc])
+            qucG2qscg[iGuc] = igsc
+    print(qucG2qscg)
+    print('chimat_sc[1,2]')
+    print(chimat_uc[1,3])
+    print('chimat_sc[qucG2qscg[1],qucG2qscg[2]]')
+    print(chimat_sc[qucG2qscg[1],qucG2qscg[3]])
 
     return
 
