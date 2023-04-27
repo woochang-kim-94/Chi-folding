@@ -45,7 +45,7 @@ class Polarizability:
         return None
 
     @classmethod
-    def from_hdf5(cls, fn_chimat):
+    def header_from_hdf5(cls, fn_chimat):
         """
         --INPUT--
         fn_chimat : str
@@ -76,6 +76,7 @@ class Polarizability:
         ### We do not load full matrix in this step ###
         matrix = None
         matrix_diag = None
+        #chimat_h5.close()
         return cls(chimat_h5 = chimat_h5
             ,alat = alat
             ,blat = blat

@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 """
-Generate Chi_sc(qsc,g,gp) from Chi_uc(quc,G,Gp)
+Generate Chi_sc(qsc,gsc,gscp) from Chi_uc(quc,guc,gucp)
 
 Comments on notation & naming convention
     1. For real/reciprocal space, we use Bohr/Bohr^{-1} unit.
     2. Be carefull about distinguishing crystal and Bohr coordinate.
-       Note, unlike q_bohr, physical meaning of q_crys depends on the cell size
+       Unlike q_bohr, physical meaning of q_crys depends on the cell size
     3. We use 'quc' for representing q-vectors in unit-cell BZ.
        We use 'qsc' for representing q-vectors in supercell BZ.
-       We use 'g' or 'gsc' for representing G-vectors in supercell representation.
-       We use 'G' or 'Guc' for representing G-vectors in unit-cell representation.
+       We use 'gsc' and/or 'hklsc' for representing G-vectors in supercell representation.
+       We use 'guc' and/or 'hkluc' for representing G-vectors in unit-cell representation.
 
 Written by W. Kim  Apr. 20. 2023
 woochang_kim@berkeley.edu
@@ -24,18 +24,26 @@ from typedef import Polarizability
 def main():
     sc_eps_path = '../sc/3.1-chi/'
     uc_eps_path = '../uc/3.1-chi/'
-    chi0_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'./chi0mat.h5')
-    chi0_uc = Polarizability.from_hdf5(fn_chimat=uc_eps_path+'./chi0mat.h5')
-    chi_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'./chimat.h5')
-    chi_uc = Polarizability.from_hdf5(fn_chimat=uc_eps_path+'./chimat.h5')
+    chi0_sc = Polarizability.header_from_hdf5(fn_chimat=sc_eps_path+'./chi0mat.h5')
+    chi0_uc = Polarizability.header_from_hdf5(fn_chimat=uc_eps_path+'./chi0mat.h5')
+    # For unfolding purpose we assume q0 = 0 exactly.
+    chi0_uc.qpts_crys = np.array([[0.0,0.0,0.0]])
+    chi0_uc.qpts_bohr = np.array([[0.0,0.0,0.0]])
+    chi0_sc.qpts_crys = np.array([[0.0,0.0,0.0]])
+    chi0_sc.qpts_bohr = np.array([[0.0,0.0,0.0]])
+    chi_sc = Polarizability.header_from_hdf5(fn_chimat=sc_eps_path+'./chimat.h5')
+    chi_uc = Polarizability.header_from_hdf5(fn_chimat=uc_eps_path+'./chimat.h5')
     #kuc_map_crys : real(nqsc, size_sc, 3)
     #have mapped k_uc in crystal_uc
     quc_map_crys = np.load('../sc/2.1-wfn/kuc_map_crys.npy')
     #nqsc, sc_size, _ = quc_map_crys.shape
-    #tree  = KDTree(qpts_uc)
+    tree  = KDTree(chi_uc.qpts_crys)
     #quc_map_iq   = np.zeros((nqsc, sc_size),dtype=np.int32)
-    #_, iquc = tree.query(quc_map_crys[1,:,:],k=1,distance_upper_bound=1e-9)
-    simple_hard_coding(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
+    _, quc_map_iq = tree.query(quc_map_crys,k=1,distance_upper_bound=1e-9)
+    print(quc_map_iq)
+    exit()
+    simple_hard_coding_for_qsc0(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
+    #simple_hard_coding(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
     #print(_)
     #print(iquc)
     #qucG2qscg = get_qucG2qscg(chi_sc, chi_uc)
@@ -43,13 +51,64 @@ def main():
 
 
 
-def simple_hard_coding(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_crys):
+def simple_hard_coding_for_qsc0(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_crys):
     """
     From Chi(iquc_global=7), find equivalent elements in Chi(iqsc_global=1)
 
     """
     # UC
-    iquc_l = 6
+    iquc_l = 1
+    uc_gind_eps2rho = chi_uc.gind_eps2rho
+    print(chi_uc.components[chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]]-1])
+    chimat_uc = chi_uc.get_mat_iq(iq=iquc_l)
+
+    # SC
+    iqsc_l = 0
+    tree = KDTree(chi_sc.components[chi_sc.gind_eps2rho[iqsc_l,0:chi_sc.nmtx[iqsc_l]]-1])
+    #tree = KDTree(chi_sc.components[chi_sc.gind_eps2rho[iqsc_l,0:chi_sc.nmtx[iqsc_l]]-1]@chi_sc.bvec_bohr)
+    #print('blat', hi_sc.blat)
+    print('chi_sc.components[chi_sc.gind_eps2rho[iqsc_l,0:chi_sc.nmtx[iqsc_l]]-1]')
+    print(chi_sc.components[chi_sc.gind_eps2rho[iqsc_l,0:chi_sc.nmtx[iqsc_l]]-1])
+    chimat_sc = chi_sc.get_mat_iq(iq=iqsc_l)
+    print(len(chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]]))
+    qucG2qscg = np.zeros((len(chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]])),dtype=np.int32)
+    print('init',qucG2qscg)
+    for iguc, hkl_uc in enumerate(chi_uc.components[chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]]-1]):
+        guc_bohr = hkl_uc@chi_uc.bvec_bohr
+        gsc_bohr = guc_bohr+chi_uc.qpts_bohr[iquc_l]-chi_sc.qpts_bohr[iqsc_l]
+        #gsc_bohr = guc_bohr#+chi_uc.qpts_bohr[iquc_l]
+        gsc_crys = gsc_bohr@np.linalg.inv(chi_sc.bvec_bohr)
+        dist, igsc = tree.query([gsc_crys],k=1)
+        #print(dist)
+        if dist[0] < 1e-8:
+            print('dist[0]',dist[0])
+            print('igsc[0]',igsc[0])
+            igsc = igsc[0]
+            #print('chimat_sc[igsc,igsc]')
+            #print(chimat_sc[igsc,igsc])
+            qucG2qscg[iguc] = igsc
+        else:
+            print(f'Cannot find matched igsc for iguc: {iguc}')
+            Error
+
+    print(qucG2qscg)
+    for i in range(8):
+        for j in range(8):
+            print('\n')
+            print(f'chimat_sc[{i},{j}]')
+            print(chimat_uc[i,i])
+            print(f'chimat_sc[qucG2qscg[{i}],qucG2qscg[{j}]]')
+            print(chimat_sc[qucG2qscg[i],qucG2qscg[i]])
+
+    return
+
+def simple_hard_coding(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_iq):
+    """
+    From Chi(iquc_global=7), find equivalent elements in Chi(iqsc_global=1)
+
+    """
+    # UC
+    iquc_l = 12
     uc_gind_eps2rho = chi_uc.gind_eps2rho
     print(chi_uc.components[chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]]-1])
     chimat_uc = chi_uc.get_mat_iq(iq=iquc_l)
@@ -63,39 +122,33 @@ def simple_hard_coding(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_crys):
     print(chi_sc.components[chi_sc.gind_eps2rho[iqsc_l,0:chi_sc.nmtx[iqsc_l]]-1])
     chimat_sc = chi_sc.get_mat_iq(iq=iqsc_l)
     qucG2qscg = np.empty((len(chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]])),dtype=np.int32)
-    for iGuc, hkl_uc in enumerate(chi_uc.components[chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]]-1]):
-        #print(iGuc,hkl_uc)
-        Guc_bohr = hkl_uc@chi_uc.bvec_bohr
-        print('\n')
-        print(hkl_uc)
-        print('chimat_uc[iGuc,iGuc]')
-        print(chimat_uc[iGuc,iGuc])
-        #print(chi_uc.qpts_bohr[iquc_l])
-        #print(chi_sc.qpts_bohr[iqsc_l])
-        #print(chi_uc.qpts_bohr[iquc_l]-chi_sc.qpts_bohr[iqsc_l])
-        gsc_bohr = Guc_bohr+chi_uc.qpts_bohr[iquc_l]-chi_sc.qpts_bohr[iqsc_l]
+    for iguc, hkl_uc in enumerate(chi_uc.components[chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]]-1]):
+        guc_bohr = hkl_uc@chi_uc.bvec_bohr
+        gsc_bohr = guc_bohr+chi_uc.qpts_bohr[iquc_l]-chi_sc.qpts_bohr[iqsc_l]
         gsc_crys = gsc_bohr@np.linalg.inv(chi_sc.bvec_bohr)
-        print('gsc_crys:', gsc_crys)
         dist, igsc = tree.query([gsc_crys],k=1)
         #print(dist)
         if dist[0] < 1e-9:
-            print('dist[0]',dist[0])
-            print('igsc[0]',igsc[0])
+            #print('dist[0]',dist[0])
+            #print('igsc[0]',igsc[0])
             igsc = igsc[0]
-            print('chimat_sc[igsc,igsc]')
-            print(chimat_sc[igsc,igsc])
-            qucG2qscg[iGuc] = igsc
+            #print('chimat_sc[igsc,igsc]')
+            #print(chimat_sc[igsc,igsc])
+            qucG2qscg[iguc] = igsc
     print(qucG2qscg)
-    print('chimat_sc[1,2]')
-    print(chimat_uc[1,3])
-    print('chimat_sc[qucG2qscg[1],qucG2qscg[2]]')
-    print(chimat_sc[qucG2qscg[1],qucG2qscg[3]])
+    for i in range(8):
+        for j in range(8):
+            print('\n')
+            print(f'chimat_sc[{i},{j}]')
+            print(chimat_uc[i,i])
+            print(f'chimat_sc[qucG2qscg[{i}],qucG2qscg[{j}]]')
+            print(chimat_sc[qucG2qscg[i],qucG2qscg[i]])
 
     return
 
 
 
-def get_qucG2qscg(chi_sc, chi_uc, quc_map_crys):
+def get_qucG2qscg(chi_sc, chi_uc, quc_map_iq):
     """
     Get mapping indices from quc+G to qsc+g
     dat
@@ -106,28 +159,129 @@ def get_qucG2qscg(chi_sc, chi_uc, quc_map_crys):
 
     chi_uc : Polarizability
 
-    quc_map_crys : real(nqsc, size_sc, 3)
+    chi0_sc : Polarizability
+
+    chi0_uc : Polarizability
+
+    quc_map_iq : real(nqsc, size_sc)
 
 
     --OUTPUT--
-    qucG2qscg : int(nq_sc,sc_size,nG)
-        For a given quc+G index in Chi_quc, return qsc+g index in Chi_qsc
-        Note, for a given qsc, we only consider relavant 'sc_size' quc.
+    qucG2qscg : int(nq_sc,sc_size,max(nmatx_uc))
+        For a given quc+guc index in Chi_quc, return qsc+gsc index in Chi_qsc.
+        Note, for a given qsc, we only consider 'relavant' quc in {quc: quc = qsc+gsc}.
     """
-    nqsc, sc_size, _ = quc_map_crys.shape
-    tree = KDTree(chi_uc.qpts_crys)
-    quc_map_iq = np.zeros((nqsc, sc_size),dtype=np.int32)
-    _, iquc = tree.query(quc_map_crys[1,:,:],k=1,distance_upper_bound=1e-9)
-    print(chi_uc.nmtx)
-    print(chi_uc.gind_eps2rho.shape)
-    print(chi_uc.components.shape)
-    for iqsc in range(nqsc):
-        qsc_bohr = chi_sc.qpts_bohr[iqsc]
-        for iquc_local in range(sc_size):
-            #Here iquc_local means index of quc in {qsc + g} in uc BZ
-            #for a given qsc.
-            quc_crys = quc_map_crys[iqsc,iquc_local,:]
-            quc_bohr = quc_crys@chi_uc.bvec_bohr
+    bvec_bohr_uc = chi_uc.bvec_bohr
+    bvec_bohr_sc = chi_sc.bvec_bohr
+
+    # 1. assign the shape of qucG2qscg
+    max_rank_uc  = np.max(chi_uc.nmatx)      # maximum rank of chi_uc
+    max_rank_uc  = max(nmatx_uc_max,np.max(chi0_uc.nmatx))
+    nquc         = len(chi_uc.qpts_crys) + 1
+    nqsc         = len(chi_sc.qpts_crys) + 1 # Assume we only have 'one' q0sc
+    sc_size      = np.int32(nqsc/nquc)       # Size of supercell
+    qucG2qscg    = np.zeros((nqsc,sc_size,max_rank_uc))
+
+
+    # 2. We devide mapping procedure into 3-parts
+    # (a). q0sc <-> q0uc
+    # (b). q0sc <-> quc
+    # (c). qsc  <-> quc
+    quc_bohr_lst = np.concatenate(chi0_uc.qpts_bohr,chi_uc.qpts_bohr)
+    qsc_bohr_lst = np.concatenate(chi0_sc.qpts_bohr,chi_sc.qpts_bohr)
+
+
+    # 2-(a). q0sc <-> q0uc
+    # Here, we find mapping between q0sc+gsc and q0uc+guc
+    # Note, we q0sc/q0uc are exactly zero vector for mapping purpose!
+    q0uc_bohr = chi0_uc.qpts_bohr[0] # We don't use ...
+    q0sc_bohr = chi0_sc.qpts_bohr[0]
+
+    # set of guc at q0uc
+    set_hkluc_q0 = chi0_uc.components[chi0_uc.gind_eps2rho[0,:chi0_uc.nmtx[0]]-1]
+    # set of gsc at q0sc
+    set_hklsc_q0 = chi0_sc.components[chi0_sc.gind_eps2rho[0,:chi0_sc.nmtx[0]]-1]
+    q0sc_tree = KDTree(set_hklsc_q0)
+    for iguc, hkluc in enumerate(set_hkluc_q0):
+        guc_bohr = hkluc@bvec_bohr_uc
+        gsc_bohr = guc_bohr # + q0uc_bohr - q0sc_bohr
+        gsc_crys = gsc_bohr@np.linalg.inv(bvec_bohr_sc) #should be int
+        dist, igsc = q0sc_tree.query([gsc_crys],k=1)
+        if dist[0] < 1e-8:
+            #print('dist[0]',dist[0])
+            #print('igsc[0]',igsc[0])
+            igsc = igsc[0]
+            qucG2qscg[0,0,iguc] = igsc
+        else:
+            print('\n2-(a). q0sc <-> q0uc')
+            print(f'Cannot find matched igsc for iguc: {iguc}')
+            Error
+    # 2-(a). q0sc <-> q0uc Done
+
+
+    # 2- (b). q0sc <-> quc
+    # Here, we need to deal with multiple quc
+    # iquc_l represent a local quc index for a given qsc
+    # iquc_g represent a global quc index in 'chi0_uc.qpts'
+    # Note! iquc_g does not include q0 vector
+    quc_map_q0sc = quc_map_iq[0,:]
+    for iquc_l, iquc_g in enumerate(quc_map_q0sc):
+        if iquc_l == 0:
+            # we already have done q0sc <-> q0uc
+            continue
+        else:
+            quc_bohr = quc_bohr_lst[iquc_g+1]
+            set_hkluc_q = chi_uc.components[chi_uc.gind_eps2rho[iquc_g,:chi_uc.nmtx[iquc]]-1]
+            for iguc, hkluc in enumerate(set_hkluc_q):
+                guc_bohr = hkluc@bvec_bohr_uc
+                gsc_bohr = guc_bohr + quc_bohr # - q0sc_bohr
+                gsc_crys = gsc_bohr@np.linalg.inv(bvec_bohr_sc) #should be int
+                dist, igsc = q0sc_tree.query([gsc_crys],k=1)
+                if dist[0] < 1e-8:
+                    #print('dist[0]',dist[0])
+                    #print('igsc[0]',igsc[0])
+                    igsc = igsc[0]
+                    qucG2qscg[0,iquc_l,iguc] = igsc
+                else:
+                    print('\n2-(b). q0sc <-> quc')
+                    print(f'Cannot find matched igsc for iguc: {iguc}')
+                    Error
+    # 2-(b). q0sc <-> quc Done
+
+
+    # 2- (b). qsc <-> quc
+    # Here, we need to deal with multiple quc
+    # iquc_l represent a local quc index for a given qsc
+    # iquc_g represent a global quc index in 'chi0_uc.qpts'
+    # Note! iquc_g does not include q0 vector
+    for iqsc in enumerate(qsc_bohr_lst):
+        if iqsc_l==0:
+            # we already have done q0sc <->
+            continue
+        else
+            set_hklsc_q = chi_sc.components[chi_sc.gind_eps2rho[iqsc-1,:chi_sc.nmtx[iqsc-1]]-1]
+            quc_map_qsc = quc_map_iq[iqsc,:]
+            for iquc_l, iquc_g in enumerate(quc_map_q0sc):
+                quc_bohr = quc_bohr_lst[iquc_g+1]
+                set_hkluc_q = chi_uc.components[chi_uc.gind_eps2rho[iquc_g,:chi_uc.nmtx[iquc]]-1]
+                for iguc, hkluc in enumerate(set_hkluc_q):
+                    guc_bohr = hkluc@bvec_bohr_uc
+                    gsc_bohr = guc_bohr + quc_bohr # - q0sc_bohr
+                    gsc_crys = gsc_bohr@np.linalg.inv(bvec_bohr_sc) #should be int
+                    dist, igsc = q0sc_tree.query([gsc_crys],k=1)
+                    if dist[0] < 1e-8:
+                        #print('dist[0]',dist[0])
+                        #print('igsc[0]',igsc[0])
+                        igsc = igsc[0]
+                        qucG2qscg[0,iquc_l,iguc] = igsc
+                    else:
+                        print('\n2-(b). q0sc <-> quc')
+                        print(f'Cannot find matched igsc for iguc: {iguc}')
+                        Error
+    # 2-(b). q0sc <-> quc Done
+
+
+
 
 
 
