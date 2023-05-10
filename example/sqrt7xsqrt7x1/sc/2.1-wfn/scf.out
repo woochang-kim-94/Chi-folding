@@ -1,0 +1,6 @@
+TACC:  Starting up job 5405585 
+TACC:  Starting parallel tasks... 
+[mpiexec@c202-001.frontera.tacc.utexas.edu] Sending Ctrl-C to processes as requested
+[mpiexec@c202-001.frontera.tacc.utexas.edu] Press Ctrl-C again to force abort
+TACC:  MPI job exited with code: 1 
+TACC:  Shutdown complete. Exiting. 

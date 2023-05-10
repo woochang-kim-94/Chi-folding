@@ -1,4 +1,11 @@
-example/**
+#example/**
 *.pyc
 src/__pycache__/**
 example.tar
+*.hdf5
+*.h5
+*WFN*
+*WFNq*
+*.upf
+*.dat
+*.npy

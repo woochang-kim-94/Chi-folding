@@ -1,0 +1,15 @@
+alat
+3.15
+Unit-cell vectors
+1.0             0.000000000000  0.00
+0.5             0.8660254038    0.00 
+0.000000000000  0.000000000000  7.9365079365 
+Super-cell vectors
+ 1 2
+-2 3
+npools
+7
+QE_command
+ibrun pw.x
+QE_input_file
+in_QE
