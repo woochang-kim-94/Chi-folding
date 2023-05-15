@@ -41,8 +41,8 @@ def main():
     #quc_map_iq   = np.zeros((nqsc, sc_size),dtype=np.int32)
     _, quc_map_iq = tree.query(quc_map_crys,k=1,distance_upper_bound=1e-9)
     print(quc_map_iq)
-    exit()
-    simple_hard_coding_for_qsc0(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
+    #simple_hard_coding_for_qsc0(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
+    get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq)
     #simple_hard_coding(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
     #print(_)
     #print(iquc)
@@ -148,7 +148,7 @@ def simple_hard_coding(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_iq):
 
 
 
-def get_qucG2qscg(chi_sc, chi_uc, quc_map_iq):
+def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
     """
     Get mapping indices from quc+G to qsc+g
     dat
@@ -175,115 +175,117 @@ def get_qucG2qscg(chi_sc, chi_uc, quc_map_iq):
     bvec_bohr_sc = chi_sc.bvec_bohr
 
     # 1. assign the shape of qucG2qscg
-    max_rank_uc  = np.max(chi_uc.nmatx)      # maximum rank of chi_uc
-    max_rank_uc  = max(nmatx_uc_max,np.max(chi0_uc.nmatx))
-    nquc         = len(chi_uc.qpts_crys) + 1
-    nqsc         = len(chi_sc.qpts_crys) + 1 # Assume we only have 'one' q0sc
-    sc_size      = np.int32(nqsc/nquc)       # Size of supercell
-    qucG2qscg    = np.zeros((nqsc,sc_size,max_rank_uc))
+    max_rank_uc  = np.max(chi_uc.nmtx)      # maximum rank of chi_uc
+    max_rank_uc  = max(max_rank_uc,np.max(chi0_uc.nmtx))
+    quc_bohr_lst = np.concatenate((chi0_uc.qpts_bohr,chi_uc.qpts_bohr), axis=0)
+    qsc_bohr_lst = np.concatenate((chi0_sc.qpts_bohr,chi_sc.qpts_bohr), axis=0)
+    nquc         = len(quc_bohr_lst)
+    nqsc         = len(qsc_bohr_lst)        # Assume we only have 'one' q0sc
+    sc_size      = np.int32(nquc/nqsc)      # Size of supercell
 
+    # qucG2scg is a zeros. It causes potential problem because even before mapping
+    # it is already mapped to '0'
+    qucG2qscg    = np.zeros((nqsc,sc_size,max_rank_uc),dtype=np.int32)
 
     # 2. We devide mapping procedure into 3-parts
     # (a). q0sc <-> q0uc
     # (b). q0sc <-> quc
     # (c). qsc  <-> quc
-    quc_bohr_lst = np.concatenate(chi0_uc.qpts_bohr,chi_uc.qpts_bohr)
-    qsc_bohr_lst = np.concatenate(chi0_sc.qpts_bohr,chi_sc.qpts_bohr)
 
 
-    # 2-(a). q0sc <-> q0uc
+    print("\n2-(a). q0sc <-> q0uc")
     # Here, we find mapping between q0sc+gsc and q0uc+guc
     # Note, we q0sc/q0uc are exactly zero vector for mapping purpose!
-    q0uc_bohr = chi0_uc.qpts_bohr[0] # We don't use ...
-    q0sc_bohr = chi0_sc.qpts_bohr[0]
+    q0uc_bohr = quc_bohr_lst[0] # We don't use ...
+    q0sc_bohr = qsc_bohr_lst[0]
 
-    # set of guc at q0uc
+    # set of miller id (hkl)_uc of guc at q0uc
     set_hkluc_q0 = chi0_uc.components[chi0_uc.gind_eps2rho[0,:chi0_uc.nmtx[0]]-1]
-    # set of gsc at q0sc
+    # set of miller id (hkl)_sc of gsc at q0sc
     set_hklsc_q0 = chi0_sc.components[chi0_sc.gind_eps2rho[0,:chi0_sc.nmtx[0]]-1]
     q0sc_tree = KDTree(set_hklsc_q0)
     for iguc, hkluc in enumerate(set_hkluc_q0):
         guc_bohr = hkluc@bvec_bohr_uc
         gsc_bohr = guc_bohr # + q0uc_bohr - q0sc_bohr
         gsc_crys = gsc_bohr@np.linalg.inv(bvec_bohr_sc) #should be int
-        dist, igsc = q0sc_tree.query([gsc_crys],k=1)
+        dist, igsc_lst = q0sc_tree.query([gsc_crys],k=1)
         if dist[0] < 1e-8:
             #print('dist[0]',dist[0])
             #print('igsc[0]',igsc[0])
-            igsc = igsc[0]
-            qucG2qscg[0,0,iguc] = igsc
+            igsc = igsc_lst[0]
+            qucG2qscg[0,0,iguc] = igsc #qucG2qscg[iqsc,iquc_l,iguc]
         else:
             print('\n2-(a). q0sc <-> q0uc')
             print(f'Cannot find matched igsc for iguc: {iguc}')
             Error
-    # 2-(a). q0sc <-> q0uc Done
+    print("2-(a). q0sc <-> q0uc Done")
 
 
-    # 2- (b). q0sc <-> quc
-    # Here, we need to deal with multiple quc
-    # iquc_l represent a local quc index for a given qsc
-    # iquc_g represent a global quc index in 'chi0_uc.qpts'
-    # Note! iquc_g does not include q0 vector
+    print("2- (b). q0sc <-> quc")
+    # Here, we need to deal with multiple quc=\=0
+    # iquc_l represent a local quc index within given qsc
+    # iquc_g represent a global quc index in 'chi_uc.qpts'
+    # Note! 'chi_uc.qpts' does not include q0 vector
     quc_map_q0sc = quc_map_iq[0,:]
     for iquc_l, iquc_g in enumerate(quc_map_q0sc):
         if iquc_l == 0:
             # we already have done q0sc <-> q0uc
             continue
         else:
-            quc_bohr = quc_bohr_lst[iquc_g+1]
-            set_hkluc_q = chi_uc.components[chi_uc.gind_eps2rho[iquc_g,:chi_uc.nmtx[iquc]]-1]
+            quc_bohr = chi_uc.qpts_bohr[iquc_g]
+            set_hkluc_q = chi_uc.components[chi_uc.gind_eps2rho[iquc_g,:chi_uc.nmtx[iquc_g]]-1]
             for iguc, hkluc in enumerate(set_hkluc_q):
                 guc_bohr = hkluc@bvec_bohr_uc
                 gsc_bohr = guc_bohr + quc_bohr # - q0sc_bohr
                 gsc_crys = gsc_bohr@np.linalg.inv(bvec_bohr_sc) #should be int
-                dist, igsc = q0sc_tree.query([gsc_crys],k=1)
+                dist, igsc_lst = q0sc_tree.query([gsc_crys],k=1)
                 if dist[0] < 1e-8:
                     #print('dist[0]',dist[0])
                     #print('igsc[0]',igsc[0])
-                    igsc = igsc[0]
+                    igsc = igsc_lst[0]
                     qucG2qscg[0,iquc_l,iguc] = igsc
                 else:
                     print('\n2-(b). q0sc <-> quc')
                     print(f'Cannot find matched igsc for iguc: {iguc}')
                     Error
+    print("2- (b). q0sc <-> quc Done")
+    print(qucG2qscg[0])
     # 2-(b). q0sc <-> quc Done
 
 
-    # 2- (b). qsc <-> quc
-    # Here, we need to deal with multiple quc
-    # iquc_l represent a local quc index for a given qsc
-    # iquc_g represent a global quc index in 'chi0_uc.qpts'
-    # Note! iquc_g does not include q0 vector
-    for iqsc in enumerate(qsc_bohr_lst):
-        if iqsc_l==0:
+    print("2- (c). qsc <-> quc")
+    # Here, we need to deal with multiple qsc=\=0, quc=\=0
+    # iquc_l represent a local quc index within given qsca
+    # iquc_g represent a global quc index in 'chi_uc.qpts'
+    # Note! 'chi_uc.qpts' does not include qsc0
+    for iqsc, qsc_bohr in enumerate(qsc_bohr_lst):
+        if iqsc==0:
             # we already have done q0sc <->
             continue
-        else
+        else:
             set_hklsc_q = chi_sc.components[chi_sc.gind_eps2rho[iqsc-1,:chi_sc.nmtx[iqsc-1]]-1]
+            qsc_tree = KDTree(set_hklsc_q)
+            # iqsc -> iqsc-1 in chi_sc bcz we don't have qsc0
             quc_map_qsc = quc_map_iq[iqsc,:]
-            for iquc_l, iquc_g in enumerate(quc_map_q0sc):
-                quc_bohr = quc_bohr_lst[iquc_g+1]
-                set_hkluc_q = chi_uc.components[chi_uc.gind_eps2rho[iquc_g,:chi_uc.nmtx[iquc]]-1]
+            for iquc_l, iquc_g in enumerate(quc_map_qsc):
+                quc_bohr = chi_uc.qpts_bohr[iquc_g]
+                set_hkluc_q = chi_uc.components[chi_uc.gind_eps2rho[iquc_g,:chi_uc.nmtx[iquc_g]]-1]
                 for iguc, hkluc in enumerate(set_hkluc_q):
                     guc_bohr = hkluc@bvec_bohr_uc
-                    gsc_bohr = guc_bohr + quc_bohr # - q0sc_bohr
+                    gsc_bohr = guc_bohr + quc_bohr - qsc_bohr
                     gsc_crys = gsc_bohr@np.linalg.inv(bvec_bohr_sc) #should be int
-                    dist, igsc = q0sc_tree.query([gsc_crys],k=1)
+                    dist, igsc_lst = qsc_tree.query([gsc_crys],k=1)
                     if dist[0] < 1e-8:
                         #print('dist[0]',dist[0])
                         #print('igsc[0]',igsc[0])
-                        igsc = igsc[0]
-                        qucG2qscg[0,iquc_l,iguc] = igsc
+                        igsc = igsc_lst[0]
+                        qucG2qscg[iqsc,iquc_l,iguc] = igsc
                     else:
-                        print('\n2-(b). q0sc <-> quc')
+                        print('\n2-(c). q0sc <-> quc')
                         print(f'Cannot find matched igsc for iguc: {iguc}')
                         Error
-    # 2-(b). q0sc <-> quc Done
-
-
-
-
-
+    print("2-(c). q0sc <-> quc Done")
+    print(qucG2qscg)
 
 
     return qucG2qscg
