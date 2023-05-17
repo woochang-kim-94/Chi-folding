@@ -41,13 +41,125 @@ def main():
     #quc_map_iq   = np.zeros((nqsc, sc_size),dtype=np.int32)
     _, quc_map_iq = tree.query(quc_map_crys,k=1,distance_upper_bound=1e-9)
     print(quc_map_iq)
+    # Because the tree doesn't contain the quc0 so quc_map_iq[0,0] is not mapped now.
+    # so we assume quc_map_iq[0,0] should corresponding to q0uc and put '0'
+    quc_map_iq[0,0] = 0
     #simple_hard_coding_for_qsc0(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
-    get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq)
-    #simple_hard_coding(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
-    #print(_)
-    #print(iquc)
-    #qucG2qscg = get_qucG2qscg(chi_sc, chi_uc)
+
+    qucG2qscg = get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq)
+    #iqsc = 8
+    #test_mat   = make_sc(iqsc, chi_sc.get_mat_iq(iqsc-1), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
+    test_mat   = make_sc0(0, chi0_sc.get_mat_iq(0), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
+
+    chi_uc.close_h5()
+    chi_sc.close_h5()
+    chi0_uc.close_h5()
+    chi0_uc.close_h5()
     return None
+
+def make_sc0(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
+    """
+    Test Code
+    From Chi_uc(quc, guc, gpuc), make a Chi_sc(gsc,gscp) at iqsc
+    Currently we read prexisting Chi_sc(gsc,gscp) and copy the shape of it.
+
+    --INPUT--
+    iqsc : int
+        q-point index for sc. qsc0 correponding to 0
+
+    target_mat : complex128(:,:)
+
+    chi0_uc : Polarizability
+
+    chi_uc : Polarizability
+
+    qucG2qscg : int(nqsc,sc_size,nguc)
+
+    quc_map_iq : real(nqsc, size_sc)
+
+
+    --OUTPUT--
+    chimat_sc_iq : complex128(:,:)
+        constructed chi_sc at iqsc
+    """
+
+    chimat_sc_iq = np.zeros_like(target_mat)
+    #Needed qucG2qsc
+    qucG2qscg_tmp  = qucG2qscg[iqsc,:,:]
+    quc_map_iq_tmp =  quc_map_iq[iqsc,:]
+    print(quc_map_iq_tmp)
+    for iquc_l, iquc_g in enumerate(quc_map_iq_tmp):
+        if (iquc_l == 0) and (iqsc == 0):
+            print("We are construct q0sc from q0uc")
+            chimat_uc_iq = chi0_uc.get_mat_iq(iquc_g)
+            for iguc in range(chi0_uc.nmtx[iquc_g]):
+                for jguc in range(chi0_uc.nmtx[iquc_g]):
+                    igsc = qucG2qscg_tmp[iquc_l, iguc]
+                    jgsc = qucG2qscg_tmp[iquc_l, jguc]
+                    chimat_sc_iq[igsc,jgsc] = chimat_uc_iq[iguc,jguc]
+        else:
+            chimat_uc_iq = chi_uc.get_mat_iq(iquc_g)
+            for iguc in range(chi_uc.nmtx[iquc_g]):
+                for jguc in range(chi_uc.nmtx[iquc_g]):
+                    igsc = qucG2qscg_tmp[iquc_l, iguc]
+                    jgsc = qucG2qscg_tmp[iquc_l, jguc]
+                    chimat_sc_iq[igsc,jgsc] = chimat_uc_iq[iguc,jguc]
+    print('constructed')
+    print(chimat_sc_iq[0,:10])
+    print('target')
+    print(target_mat[0,:10])
+    print('subtract')
+    print(np.abs(target_mat[0,:10]-chimat_sc_iq[0,:10]))
+
+
+    return None
+
+def make_sc(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
+    """
+    Test Code
+    From Chi_uc(quc, guc, gpuc), make a Chi_sc(gsc,gscp) at iqsc
+    Currently we read prexisting Chi_sc(gsc,gscp) and copy the shape of it.
+
+    --INPUT--
+    iqsc : int
+        q-point index for sc. qsc0 correponding to 0
+
+    target_mat : complex128(:,:)
+
+    chi0_uc : Polarizability
+
+    chi_uc : Polarizability
+
+    qucG2qscg : int(nqsc,sc_size,nguc)
+
+    quc_map_iq : real(nqsc, size_sc)
+
+
+    --OUTPUT--
+    chimat_sc_iq : complex128(:,:)
+        constructed chi_sc at iqsc
+    """
+    chimat_sc_iq = np.zeros_like(target_mat)
+    #Needed qucG2qsc
+    qucG2qscg_tmp  = qucG2qscg[iqsc,:,:]
+    quc_map_iq_tmp =  quc_map_iq[iqsc,:]
+    for iquc_l, iquc_g in enumerate(quc_map_iq_tmp):
+        chimat_uc_iq = chi_uc.get_mat_iq(iquc_g)
+        for iguc in range(chi_uc.nmtx[iquc_g]):
+            for jguc in range(chi_uc.nmtx[iquc_g]):
+                igsc = qucG2qscg_tmp[iquc_l, iguc]
+                jgsc = qucG2qscg_tmp[iquc_l, jguc]
+                chimat_sc_iq[igsc,jgsc] = chimat_uc_iq[iguc,jguc]
+    print('constructed')
+    print(chimat_sc_iq[0,:10])
+    print('target')
+    print(target_mat[0,:10])
+    print('subtract')
+    print(np.abs(target_mat[0,:10]-chimat_sc_iq[0,:10]))
+
+
+    return None
+
 
 
 
@@ -100,7 +212,7 @@ def simple_hard_coding_for_qsc0(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_crys):
             print(f'chimat_sc[qucG2qscg[{i}],qucG2qscg[{j}]]')
             print(chimat_sc[qucG2qscg[i],qucG2qscg[i]])
 
-    return
+    return None
 
 def simple_hard_coding(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_iq):
     """
@@ -173,19 +285,20 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
     """
     bvec_bohr_uc = chi_uc.bvec_bohr
     bvec_bohr_sc = chi_sc.bvec_bohr
-
+    print(chi_uc.nmtx)
     # 1. assign the shape of qucG2qscg
     max_rank_uc  = np.max(chi_uc.nmtx)      # maximum rank of chi_uc
     max_rank_uc  = max(max_rank_uc,np.max(chi0_uc.nmtx))
-    quc_bohr_lst = np.concatenate((chi0_uc.qpts_bohr,chi_uc.qpts_bohr), axis=0)
-    qsc_bohr_lst = np.concatenate((chi0_sc.qpts_bohr,chi_sc.qpts_bohr), axis=0)
-    nquc         = len(quc_bohr_lst)
-    nqsc         = len(qsc_bohr_lst)        # Assume we only have 'one' q0sc
+    #chi_uc.nmtx[:] = max_rank_uc
+    #chi0_uc.nmtx[:] = np.max(chi0_uc.nmtx)
+    nquc         = len(chi0_uc.qpts_bohr) + len(chi_uc.qpts_bohr)
+    nqsc         = len(chi0_sc.qpts_bohr) + len(chi_sc.qpts_bohr)        # Assume we only have 'one' q0sc
     sc_size      = np.int32(nquc/nqsc)      # Size of supercell
 
     # qucG2scg is a zeros. It causes potential problem because even before mapping
     # it is already mapped to '0'
     qucG2qscg    = np.zeros((nqsc,sc_size,max_rank_uc),dtype=np.int32)
+    qucG2qscg[:] = -1      # So we put -1 for unmapped points
 
     # 2. We devide mapping procedure into 3-parts
     # (a). q0sc <-> q0uc
@@ -196,8 +309,8 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
     print("\n2-(a). q0sc <-> q0uc")
     # Here, we find mapping between q0sc+gsc and q0uc+guc
     # Note, we q0sc/q0uc are exactly zero vector for mapping purpose!
-    q0uc_bohr = quc_bohr_lst[0] # We don't use ...
-    q0sc_bohr = qsc_bohr_lst[0]
+    q0uc_bohr = chi0_uc.qpts_bohr[0] # We don't use ...
+    q0sc_bohr = chi0_sc.qpts_bohr[0] # We don't use ...
 
     # set of miller id (hkl)_uc of guc at q0uc
     set_hkluc_q0 = chi0_uc.components[chi0_uc.gind_eps2rho[0,:chi0_uc.nmtx[0]]-1]
@@ -249,7 +362,6 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
                     print(f'Cannot find matched igsc for iguc: {iguc}')
                     Error
     print("2- (b). q0sc <-> quc Done")
-    print(qucG2qscg[0])
     # 2-(b). q0sc <-> quc Done
 
 
@@ -258,32 +370,28 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
     # iquc_l represent a local quc index within given qsca
     # iquc_g represent a global quc index in 'chi_uc.qpts'
     # Note! 'chi_uc.qpts' does not include qsc0
-    for iqsc, qsc_bohr in enumerate(qsc_bohr_lst):
-        if iqsc==0:
-            # we already have done q0sc <->
-            continue
-        else:
-            set_hklsc_q = chi_sc.components[chi_sc.gind_eps2rho[iqsc-1,:chi_sc.nmtx[iqsc-1]]-1]
-            qsc_tree = KDTree(set_hklsc_q)
-            # iqsc -> iqsc-1 in chi_sc bcz we don't have qsc0
-            quc_map_qsc = quc_map_iq[iqsc,:]
-            for iquc_l, iquc_g in enumerate(quc_map_qsc):
-                quc_bohr = chi_uc.qpts_bohr[iquc_g]
-                set_hkluc_q = chi_uc.components[chi_uc.gind_eps2rho[iquc_g,:chi_uc.nmtx[iquc_g]]-1]
-                for iguc, hkluc in enumerate(set_hkluc_q):
-                    guc_bohr = hkluc@bvec_bohr_uc
-                    gsc_bohr = guc_bohr + quc_bohr - qsc_bohr
-                    gsc_crys = gsc_bohr@np.linalg.inv(bvec_bohr_sc) #should be int
-                    dist, igsc_lst = qsc_tree.query([gsc_crys],k=1)
-                    if dist[0] < 1e-8:
-                        #print('dist[0]',dist[0])
-                        #print('igsc[0]',igsc[0])
-                        igsc = igsc_lst[0]
-                        qucG2qscg[iqsc,iquc_l,iguc] = igsc
-                    else:
-                        print('\n2-(c). q0sc <-> quc')
-                        print(f'Cannot find matched igsc for iguc: {iguc}')
-                        Error
+    for iqsc, qsc_bohr in enumerate(chi_sc.qpts_bohr):
+        set_hklsc_q = chi_sc.components[chi_sc.gind_eps2rho[iqsc,:chi_sc.nmtx[iqsc]]-1]
+        qsc_tree = KDTree(set_hklsc_q)
+        # iqsc -> iqsc+1 in chi_sc bcz we don't have qsc0
+        quc_map_qsc = quc_map_iq[iqsc+1,:]
+        for iquc_l, iquc_g in enumerate(quc_map_qsc):
+            quc_bohr = chi_uc.qpts_bohr[iquc_g]
+            set_hkluc_q = chi_uc.components[chi_uc.gind_eps2rho[iquc_g,:chi_uc.nmtx[iquc_g]]-1]
+            for iguc, hkluc in enumerate(set_hkluc_q):
+                guc_bohr = hkluc@bvec_bohr_uc
+                gsc_bohr = guc_bohr + quc_bohr - qsc_bohr
+                gsc_crys = gsc_bohr@np.linalg.inv(bvec_bohr_sc) #should be int
+                dist, igsc_lst = qsc_tree.query([gsc_crys],k=1)
+                if dist[0] < 1e-8:
+                    #print('dist[0]',dist[0])
+                    #print('igsc[0]',igsc[0])
+                    igsc = igsc_lst[0]
+                    qucG2qscg[iqsc+1,iquc_l,iguc] = igsc
+                else:
+                    print('\n2-(c). q0sc <-> quc')
+                    print(f'Cannot find matched igsc for iguc: {iguc}')
+                    Error
     print("2-(c). q0sc <-> quc Done")
     print(qucG2qscg)
 

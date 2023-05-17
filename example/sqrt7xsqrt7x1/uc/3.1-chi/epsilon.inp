@@ -1,4 +1,4 @@
-epsilon_cutoff 0.5
+epsilon_cutoff 2.0
 write_vcoul
 number_bands   17
 degeneracy_check_override
