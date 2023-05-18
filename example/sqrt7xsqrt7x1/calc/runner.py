@@ -47,9 +47,9 @@ def main():
     #simple_hard_coding_for_qsc0(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
 
     qucG2qscg = get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq)
-    #iqsc = 8
-    #test_mat   = make_sc(iqsc, chi_sc.get_mat_iq(iqsc-1), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
-    test_mat   = make_sc0(0, chi0_sc.get_mat_iq(0), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
+    iqsc = 3
+    test_mat   = make_sc(iqsc, chi_sc.get_mat_iq(iqsc-1), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
+    #test_mat  = make_sc0(0, chi0_sc.get_mat_iq(0), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
 
     chi_uc.close_h5()
     chi_sc.close_h5()
@@ -83,7 +83,11 @@ def make_sc0(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
         constructed chi_sc at iqsc
     """
 
-    chimat_sc_iq = np.zeros_like(target_mat)
+    #chimat_sc_iq_ = np.zeros_like(target_mat)
+    dummy_h5 = h5py.File('../sc/3.1-chi/chi0mat_dummy.h5','r+')
+    chimat_sc_iq = dummy_h5['mats/matrix']
+    chimat_sc_iq[0, 0, 0, :, :, 0][:] = np.zeros_like(target_mat)
+    chimat_sc_iq[0, 0, 0, :, :, 1][:] = np.zeros_like(target_mat)
     #Needed qucG2qsc
     qucG2qscg_tmp  = qucG2qscg[iqsc,:,:]
     quc_map_iq_tmp =  quc_map_iq[iqsc,:]
@@ -96,20 +100,27 @@ def make_sc0(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
                 for jguc in range(chi0_uc.nmtx[iquc_g]):
                     igsc = qucG2qscg_tmp[iquc_l, iguc]
                     jgsc = qucG2qscg_tmp[iquc_l, jguc]
-                    chimat_sc_iq[igsc,jgsc] = chimat_uc_iq[iguc,jguc]
+                    #chimat_sc_iq[igsc,jgsc] = chimat_uc_iq[iguc,jguc]
+                    chimat_sc_iq[0, 0, 0, jgsc, igsc, 0] = np.real(chimat_uc_iq[iguc,jguc])
+                    chimat_sc_iq[0, 0, 0, jgsc, igsc, 1] = np.imag(chimat_uc_iq[iguc,jguc])
         else:
             chimat_uc_iq = chi_uc.get_mat_iq(iquc_g)
             for iguc in range(chi_uc.nmtx[iquc_g]):
                 for jguc in range(chi_uc.nmtx[iquc_g]):
                     igsc = qucG2qscg_tmp[iquc_l, iguc]
                     jgsc = qucG2qscg_tmp[iquc_l, jguc]
-                    chimat_sc_iq[igsc,jgsc] = chimat_uc_iq[iguc,jguc]
+                    #chimat_sc_iq[igsc,jgsc] = chimat_uc_iq[iguc,jguc]
+                    chimat_sc_iq[0, 0, 0, jgsc, igsc, 0] = np.real(chimat_uc_iq[iguc,jguc])
+                    chimat_sc_iq[0, 0, 0, jgsc, igsc, 1] = np.imag(chimat_uc_iq[iguc,jguc])
+
     print('constructed')
-    print(chimat_sc_iq[0,:10])
+    print(chimat_sc_iq[0,0,0,:10,0,0].T +1j*chimat_sc_iq[0,0,0,:10,0,1].T)
     print('target')
     print(target_mat[0,:10])
     print('subtract')
-    print(np.abs(target_mat[0,:10]-chimat_sc_iq[0,:10]))
+    breakpoint()
+    #print(np.max(np.abs(target_mat-chimat_sc_iq[:,:])))
+    dummy_h5.close()
 
 
     return None
@@ -139,8 +150,13 @@ def make_sc(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
     chimat_sc_iq : complex128(:,:)
         constructed chi_sc at iqsc
     """
-    chimat_sc_iq = np.zeros_like(target_mat)
+    #chimat_sc_iq = np.zeros_like(target_mat)
+    dummy_h5 = h5py.File('../sc/3.1-chi/chimat_dummy.h5','r+')
+    chimat_sc_iq = dummy_h5['mats/matrix']
+    chimat_sc_iq[iqsc-1, 0, 0, :, :, 0][:] = np.zeros_like(target_mat)
+    chimat_sc_iq[iqsc-1, 0, 0, :, :, 1][:] = np.zeros_like(target_mat)
     #Needed qucG2qsc
+    print('start mapping')
     qucG2qscg_tmp  = qucG2qscg[iqsc,:,:]
     quc_map_iq_tmp =  quc_map_iq[iqsc,:]
     for iquc_l, iquc_g in enumerate(quc_map_iq_tmp):
@@ -149,13 +165,17 @@ def make_sc(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
             for jguc in range(chi_uc.nmtx[iquc_g]):
                 igsc = qucG2qscg_tmp[iquc_l, iguc]
                 jgsc = qucG2qscg_tmp[iquc_l, jguc]
-                chimat_sc_iq[igsc,jgsc] = chimat_uc_iq[iguc,jguc]
+                #chimat_sc_iq[igsc,jgsc] = chimat_uc_iq[iguc,jguc]
+                chimat_sc_iq[0, 0, 0, jgsc, igsc, 0] = np.real(chimat_uc_iq[iguc,jguc])
+                chimat_sc_iq[0, 0, 0, jgsc, igsc, 1] = np.imag(chimat_uc_iq[iguc,jguc])
+
     print('constructed')
-    print(chimat_sc_iq[0,:10])
+    print(chimat_sc_iq[0,0,0,0:10,0,0].T +1j*chimat_sc_iq[0,0,0,:10,0,1].T)
     print('target')
     print(target_mat[0,:10])
     print('subtract')
-    print(np.abs(target_mat[0,:10]-chimat_sc_iq[0,:10]))
+    #print(np.max(np.abs(target_mat-chimat_sc_iq[:,:])))
+    dummy_h5.close()
 
 
     return None

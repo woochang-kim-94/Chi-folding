@@ -12,6 +12,7 @@ import h5py
 
 class Polarizability:
     def __init__(self
+        ,fn_chimat = None
         ,chimat_h5 = None
         ,alat = None
         ,blat = None
@@ -27,11 +28,12 @@ class Polarizability:
         ,gind_eps2rho = None
         ,matrix = None
         ,matrix_diag = None):
+        self.fn_chimat =         fn_chimat
         self.chimat_h5 =         chimat_h5
         self.alat =              alat
         self.blat =              blat
-        self.avec_alat =              avec_alat
-        self.bvec_blat =              bvec_blat
+        self.avec_alat =         avec_alat
+        self.bvec_blat =         bvec_blat
         self.avec_bohr    =      avec_bohr
         self.bvec_bohr    =      bvec_bohr
         self.components =        components
@@ -77,7 +79,8 @@ class Polarizability:
         matrix = None
         matrix_diag = None
         #chimat_h5.close()
-        return cls(chimat_h5 = chimat_h5
+        return cls(fn_chimat=fn_chimat
+            ,chimat_h5 = chimat_h5
             ,alat = alat
             ,blat = blat
             ,avec_alat = avec_alat
