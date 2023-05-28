@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 """
+# Chi-folding
+Folding polarizability matrix from unit-cell representation to supercell representation
+
 Generate Chi_sc(qsc,gsc,gscp) from Chi_uc(quc,guc,gucp)
 
-Comments on notation & naming convention
+*Comments on notation & naming convention*
     1. For real/reciprocal space, we use Bohr/Bohr^{-1} unit.
     2. Be carefull about distinguishing crystal and Bohr coordinate.
        Unlike q_bohr, physical meaning of q_crys depends on the cell size
@@ -10,6 +13,15 @@ Comments on notation & naming convention
        We use 'qsc' for representing q-vectors in supercell BZ.
        We use 'gsc' and/or 'hklsc' for representing G-vectors in supercell representation.
        We use 'guc' and/or 'hkluc' for representing G-vectors in unit-cell representation.
+
+*Comments on workflow.*
+    Currently we assume that calculations of chi(eps)mat.h5 for supercell are done seperately for each q-points. It might be the case since size of chi_sc for each q-points is huge.
+
+
+*TODO*
+    1. input option for chi_uc.nmtx so that can change epscut for uc
+    2. reading header part from seperate 'qsc'
+
 
 Written by W. Kim  Apr. 20. 2023
 woochang_kim@berkeley.edu
@@ -44,10 +56,10 @@ def main():
     # Because the tree doesn't contain the quc0 so quc_map_iq[0,0] is not mapped now.
     # so we assume quc_map_iq[0,0] should corresponding to q0uc and put '0'
     quc_map_iq[0,0] = 0
-    #simple_hard_coding_for_qsc0(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
+    simple_hard_coding(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
 
     qucG2qscg = get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq)
-    iqsc = 3
+    iqsc = 5
     test_mat   = make_sc(iqsc, chi_sc.get_mat_iq(iqsc-1), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
     #test_mat  = make_sc0(0, chi0_sc.get_mat_iq(0), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
 
@@ -60,7 +72,7 @@ def main():
 def make_sc0(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
     """
     Test Code
-    From Chi_uc(quc, guc, gpuc), make a Chi_sc(gsc,gscp) at iqsc
+    From Chi_uc(quc, guc, gpuc), make a Chi_sc(gsc, gscp) at iqsc
     Currently we read prexisting Chi_sc(gsc,gscp) and copy the shape of it.
 
     --INPUT--
@@ -71,7 +83,7 @@ def make_sc0(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
 
     chi0_uc : Polarizability
 
-    chi_uc : Polarizability
+    chi_uc  : Polarizability
 
     qucG2qscg : int(nqsc,sc_size,nguc)
 
@@ -86,15 +98,17 @@ def make_sc0(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
     #chimat_sc_iq_ = np.zeros_like(target_mat)
     dummy_h5 = h5py.File('../sc/3.1-chi/chi0mat_dummy.h5','r+')
     chimat_sc_iq = dummy_h5['mats/matrix']
-    chimat_sc_iq[0, 0, 0, :, :, 0][:] = np.zeros_like(target_mat)
-    chimat_sc_iq[0, 0, 0, :, :, 1][:] = np.zeros_like(target_mat)
-    #Needed qucG2qsc
+    chimat_sc_iq[0, 0, 0, :, :, 1] = np.zeros_like(chimat_sc_iq[0, 0, 0, :, :, 1])
+    chimat_sc_iq[0, 0, 0, :, :, 0] = np.zeros_like(chimat_sc_iq[0, 0, 0, :, :, 0])
+    # Needed qucG2qsc & quc_map_iq
+    print('start mapping')
     qucG2qscg_tmp  = qucG2qscg[iqsc,:,:]
     quc_map_iq_tmp =  quc_map_iq[iqsc,:]
-    print(quc_map_iq_tmp)
+
+    # Start mapping iteration
     for iquc_l, iquc_g in enumerate(quc_map_iq_tmp):
         if (iquc_l == 0) and (iqsc == 0):
-            print("We are construct q0sc from q0uc")
+            print("We are constructing q0sc from q0uc")
             chimat_uc_iq = chi0_uc.get_mat_iq(iquc_g)
             for iguc in range(chi0_uc.nmtx[iquc_g]):
                 for jguc in range(chi0_uc.nmtx[iquc_g]):
@@ -113,17 +127,19 @@ def make_sc0(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
                     chimat_sc_iq[0, 0, 0, jgsc, igsc, 0] = np.real(chimat_uc_iq[iguc,jguc])
                     chimat_sc_iq[0, 0, 0, jgsc, igsc, 1] = np.imag(chimat_uc_iq[iguc,jguc])
 
+    subtract_mat = target_mat - (chimat_sc_iq[0,0,0,:,:,0]+1j*chimat_sc_iq[0,0,0,:,:,1]).T
     print('constructed')
     print(chimat_sc_iq[0,0,0,:10,0,0].T +1j*chimat_sc_iq[0,0,0,:10,0,1].T)
     print('target')
     print(target_mat[0,:10])
-    print('subtract')
-    breakpoint()
-    #print(np.max(np.abs(target_mat-chimat_sc_iq[:,:])))
+    print('|subtract|')
+    print(np.abs(subtract_mat[0,:50]))
+    print('np.max(subtract)')
+    print(np.max(np.abs(subtract_mat)))
     dummy_h5.close()
 
-
     return None
+
 
 def make_sc(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
     """
@@ -153,28 +169,36 @@ def make_sc(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
     #chimat_sc_iq = np.zeros_like(target_mat)
     dummy_h5 = h5py.File('../sc/3.1-chi/chimat_dummy.h5','r+')
     chimat_sc_iq = dummy_h5['mats/matrix']
-    chimat_sc_iq[iqsc-1, 0, 0, :, :, 0][:] = np.zeros_like(target_mat)
-    chimat_sc_iq[iqsc-1, 0, 0, :, :, 1][:] = np.zeros_like(target_mat)
-    #Needed qucG2qsc
+    chimat_sc_iq[iqsc-1, 0, 0, :, :, 1] = np.zeros_like(chimat_sc_iq[iqsc-1, 0, 0, :, :, 1])
+    chimat_sc_iq[iqsc-1, 0, 0, :, :, 0] = np.zeros_like(chimat_sc_iq[iqsc-1, 0, 0, :, :, 0])
+
+    # Needed qucG2qsc & quc_map_iq
     print('start mapping')
     qucG2qscg_tmp  = qucG2qscg[iqsc,:,:]
     quc_map_iq_tmp =  quc_map_iq[iqsc,:]
+
+    # Start mapping iteration
     for iquc_l, iquc_g in enumerate(quc_map_iq_tmp):
+        print(f'iquc_l: {iquc_l}')
         chimat_uc_iq = chi_uc.get_mat_iq(iquc_g)
         for iguc in range(chi_uc.nmtx[iquc_g]):
             for jguc in range(chi_uc.nmtx[iquc_g]):
                 igsc = qucG2qscg_tmp[iquc_l, iguc]
                 jgsc = qucG2qscg_tmp[iquc_l, jguc]
                 #chimat_sc_iq[igsc,jgsc] = chimat_uc_iq[iguc,jguc]
-                chimat_sc_iq[0, 0, 0, jgsc, igsc, 0] = np.real(chimat_uc_iq[iguc,jguc])
-                chimat_sc_iq[0, 0, 0, jgsc, igsc, 1] = np.imag(chimat_uc_iq[iguc,jguc])
+                chimat_sc_iq[iqsc-1, 0, 0, jgsc, igsc, 0] = np.real(chimat_uc_iq[iguc,jguc])
+                chimat_sc_iq[iqsc-1, 0, 0, jgsc, igsc, 1] = np.imag(chimat_uc_iq[iguc,jguc])
+    # End of mapping iteration
 
+    subtract_mat = target_mat - (chimat_sc_iq[iqsc-1,0,0,:,:,0]+1j*chimat_sc_iq[iqsc-1,0,0,:,:,1]).T
     print('constructed')
-    print(chimat_sc_iq[0,0,0,0:10,0,0].T +1j*chimat_sc_iq[0,0,0,:10,0,1].T)
+    print(chimat_sc_iq[iqsc-1,0,0,0:10,0,0].T +1j*chimat_sc_iq[iqsc-1,0,0,:10,0,1].T)
     print('target')
     print(target_mat[0,:10])
-    print('subtract')
-    #print(np.max(np.abs(target_mat-chimat_sc_iq[:,:])))
+    print('|subtract|')
+    print(np.abs(subtract_mat[0,:50]))
+    print('np.max(subtract)')
+    print(np.max(np.abs(subtract_mat)))
     dummy_h5.close()
 
 
@@ -237,16 +261,22 @@ def simple_hard_coding_for_qsc0(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_crys):
 def simple_hard_coding(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_iq):
     """
     From Chi(iquc_global=7), find equivalent elements in Chi(iqsc_global=1)
+    for iqsc_l = 0,
+        iquc_l = {7, 8, 9, 10, 11, 12, 13} - 1
+    for iqsc_l = 1,
+        iquc_l = {14, 15, 16, 17, 18, 19, 20}
+    for iqsc_l = 2,
+        iquc_l = {21, 22, 23, 24, 25, 26, 27}
 
     """
     # UC
-    iquc_l = 12
+    iquc_l = 27
     uc_gind_eps2rho = chi_uc.gind_eps2rho
     print(chi_uc.components[chi_uc.gind_eps2rho[iquc_l,0:chi_uc.nmtx[iquc_l]]-1])
     chimat_uc = chi_uc.get_mat_iq(iq=iquc_l)
 
     # SC
-    iqsc_l = 0
+    iqsc_l = 3
     tree = KDTree(chi_sc.components[chi_sc.gind_eps2rho[iqsc_l,0:chi_sc.nmtx[iqsc_l]]-1])
     #tree = KDTree(chi_sc.components[chi_sc.gind_eps2rho[iqsc_l,0:chi_sc.nmtx[iqsc_l]]-1]@chi_sc.bvec_bohr)
     #print('blat', hi_sc.blat)
@@ -268,13 +298,14 @@ def simple_hard_coding(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_iq):
             #print(chimat_sc[igsc,igsc])
             qucG2qscg[iguc] = igsc
     print(qucG2qscg)
-    for i in range(8):
-        for j in range(8):
+    for i in range(15):
+        for j in range(6):
             print('\n')
-            print(f'chimat_sc[{i},{j}]')
+            print(f'chimat_uc[{i},{j}]')
             print(chimat_uc[i,i])
             print(f'chimat_sc[qucG2qscg[{i}],qucG2qscg[{j}]]')
             print(chimat_sc[qucG2qscg[i],qucG2qscg[i]])
+            print('|diff| = ',np.abs(chimat_uc[i,i]-chimat_sc[qucG2qscg[i],qucG2qscg[i]]))
 
     return
 
@@ -303,9 +334,10 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
         For a given quc+guc index in Chi_quc, return qsc+gsc index in Chi_qsc.
         Note, for a given qsc, we only consider 'relavant' quc in {quc: quc = qsc+gsc}.
     """
+    print('\nStart mapping quc+guc <-> qsc+gsc')
     bvec_bohr_uc = chi_uc.bvec_bohr
     bvec_bohr_sc = chi_sc.bvec_bohr
-    print(chi_uc.nmtx)
+    #print(chi_uc.nmtx)
     # 1. assign the shape of qucG2qscg
     max_rank_uc  = np.max(chi_uc.nmtx)      # maximum rank of chi_uc
     max_rank_uc  = max(max_rank_uc,np.max(chi0_uc.nmtx))
@@ -413,7 +445,7 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
                     print(f'Cannot find matched igsc for iguc: {iguc}')
                     Error
     print("2-(c). q0sc <-> quc Done")
-    print(qucG2qscg)
+    #print(qucG2qscg)
 
 
     return qucG2qscg
