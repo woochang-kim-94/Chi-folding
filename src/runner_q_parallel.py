@@ -19,63 +19,329 @@ Generate Chi_sc(qsc,gsc,gscp) from Chi_uc(quc,guc,gucp)
 
 
 *TODO*
-    1. input option for chi_uc.nmtx so that can change epscut for uc
-    2. reading header part from seperate 'qsc'
+    3. construct Chi_sc seperately
 
 
 Written by W. Kim  Apr. 20. 2023
 woochang_kim@berkeley.edu
 """
 import os
-os.sys.path.append("../../../src/")
+os.sys.path.append("/pscratch/sd/w/wkim94/Chi-folding/src/")
 import numpy as np
+from mpi4py import MPI
 import h5py
 from scipy.spatial import KDTree
 from typedef import Polarizability
 
+comm = MPI.COMM_WORLD
 def main():
-    #sc_eps_path = '../sc/3.1-chi/'
-    sc_eps_path = '../sc/3.1.1-chi_lowepscut/'
+    """
+    Required file
+    chi0mat.h5
+    chimat.h5
+    qpts_sc w/o q0
+    kuc_map_crys.npy
+    """
+    ########################
+    ###### SET PARAMS ######
+    ########################
+    #sc_eps_path = '../../'
+    #uc_eps_path = '/pscratch/sd/w/wkim94/Moire/TBG/1.08/CC.KC-full.CH.rebo/Unitcell_3x3x1/Bot/epsilon_data/'
+    sc_eps_path = '../sc/3.1-chi-separate/'
     uc_eps_path = '../uc/3.1-chi/'
-    chi0_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'./chi0mat.h5')
+    change_nmtx = False
+    # kuc_map_crys : real(nqsc, size_sc, 3)
+    #quc_map_crys = np.load('/pscratch/sd/w/wkim94/Moire/TBG/1.08/CC.KC-full.CH.rebo/Unitcell_3x3x1/Bot/bfold/kuc_map_crys.npy')
+    quc_map_crys = np.load('../sc/2.1-wfn/kuc_map_crys.npy')
+    # contains mapped k_uc in crystal_uc
+
+    qpts_crys = get_qpts_crys(sc_eps_path+'qpts', containq0=True)
+
+    iqsc = 5
+
+    # check the number of mpi process
+    #if len(quc_map_crys[iqsc,:])%comm.size != 0:
+    #    print(f'len(quc_map_crys[iqsc,:])={len(quc_map_crys[iqsc,:])} is not divisible by mpi process')
+    #    Error
+
+    ########################
+    ###### LOAD DATA ######
+    ########################
+
+    #### Read the header of chimat file ###
     chi0_uc = Polarizability.from_hdf5(fn_chimat=uc_eps_path+'./chi0mat.h5')
+    chi_uc  = Polarizability.from_hdf5(fn_chimat=uc_eps_path+'./chimat.h5')
+    chi0_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'Eps_0/chi0mat.h5')
+    chi_sc  = Polarizability.from_split(dirname=sc_eps_path,
+                                       qpts_crys_inp=qpts_crys)
+
+    # Change nmtx
+    if change_nmtx:
+        chi_uc_nmtx = np.loadtxt('./chimat.nmtx.txt', dtype=np.int32)
+        chi0_uc_nmtx = np.loadtxt('./chi0mat.nmtx.txt',dtype=np.int32)
+        if comm.rank == 0:
+            print("Change nmtx!")
+        chi_uc.nmtx = chi_uc_nmtx
+        chi0_uc.nmtx = np.array([chi0_uc_nmtx])
+    # Change nmtx
+
+    comm.Barrier()
+
+    if comm.rank == 0:
+        print('########################')
+        print('###### START MAIN ######')
+        print('########################')
 
     # For unfolding purpose we assume q0 = 0 exactly.
     chi0_uc.qpts_crys = np.array([[0.0,0.0,0.0]])
     chi0_uc.qpts_bohr = np.array([[0.0,0.0,0.0]])
     chi0_sc.qpts_crys = np.array([[0.0,0.0,0.0]])
     chi0_sc.qpts_bohr = np.array([[0.0,0.0,0.0]])
-    chi_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'./chimat.h5')
-    chi_uc = Polarizability.from_hdf5(fn_chimat=uc_eps_path+'./chimat.h5')
 
-    # Change nmtx
-    chi_uc_nmtx = np.loadtxt('./chimat.nmtx.txt', dtype=np.int32)
-    chi0_uc_nmtx = np.loadtxt('./chi0mat.nmtx.txt',dtype=np.int32)
-    print("Change nmtx!")
-    chi_uc.nmtx = chi_uc_nmtx
-    print(chi0_uc.nmtx.shape)
-    chi0_uc.nmtx = np.array([chi0_uc_nmtx])
-    print(chi0_uc.nmtx.shape)
-    # Change nmtx
-
-    #kuc_map_crys : real(nqsc, size_sc, 3)
-    #have mapped k_uc in crystal_uc
-    quc_map_crys = np.load('../sc/2.1-wfn/kuc_map_crys.npy')
-    #nqsc, sc_size, _ = quc_map_crys.shape
     tree  = KDTree(chi_uc.qpts_crys)
     #quc_map_iq   = np.zeros((nqsc, sc_size),dtype=np.int32)
     _, quc_map_iq = tree.query(quc_map_crys,k=1,distance_upper_bound=1e-9)
-    print(quc_map_iq)
+    #print(quc_map_iq)
+
     # Because the tree doesn't contain the quc0 so quc_map_iq[0,0] is not mapped now.
     # so we assume quc_map_iq[0,0] should corresponding to q0uc and put '0'
     quc_map_iq[0,0] = 0
     #simple_hard_coding(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
 
     qucG2qscg = get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq)
-    iqsc = 6
-    test_mat   = make_sc(iqsc, chi_sc.get_mat_iq(iqsc-1), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
+    if comm.rank == 0:
+        np.save('qucG2qscg', qucG2qscg)
+
+    comm.Barrier()
+
+    if comm.rank == 0:
+        print('\n')
+        print('########################')
+        print('####### ADD Chi ########')
+        print('########################')
+        print('\n')
+
+    #_zero_mat(f'../sc/3.1-chi-separate/Eps_{iqsc}/chimat.h5')
+
+    if comm.rank == 0:
+        _zero_mat(iqsc)
+
+    comm.Barrier()
+
+    if iqsc == 0:
+        make_sc0_split(sc_eps_path, chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
+    else:
+        make_sc_split(iqsc, sc_eps_path, chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
+
+    comm.Barrier()
+
+    if comm.rank == 0:
+        _compare2ref(iqsc, sc_eps_path)
+    #test_mat   = make_sc(iqsc, chi_sc.get_mat_iq(iqsc-1), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
     #test_mat  = make_sc0(0, chi0_sc.get_mat_iq(0), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
     return None
+
+def _zero_mat(iqsc):
+    """
+    Zero out the matrix element of a hdf5 file
+    This function is for debugging.
+    """
+    #chimat_sc_iq = np.zeros_like(target_mat)
+    #dummy_h5 = h5py.File('../sc/3.1.1-chi_lowepscut/chimat_dummy.h5','r+')
+    if iqsc == 0:
+        fn = f'../sc/3.1-chi-separate/Eps_0/chi0mat.h5'
+    else:
+        fn = f'../sc/3.1-chi-separate/Eps_{iqsc}/chimat.h5'
+
+    print('\nZero out', fn)
+    dummy_h5 = h5py.File(fn, 'r+')
+    chimat_sc_iq = dummy_h5['mats/matrix']
+    chimat_sc_iq[:, :, :, :, :, :] = np.zeros_like(chimat_sc_iq)
+    dummy_h5.close()
+    return None
+
+
+def _compare2ref(iqsc, sc_eps_path):
+    print('\nSanity check')
+    if iqsc == 0:
+        fn_target = f'../sc/3.1-chi-separate_backup/Eps_0/chi0mat.h5'
+        fn = sc_eps_path + f'./Eps_0/chi0mat.h5'
+    else:
+        fn_target = f'../sc/3.1-chi-separate_backup/Eps_{iqsc}/chimat.h5'
+        fn = sc_eps_path + f'./Eps_{iqsc}/chimat.h5'
+
+    print('target: ', fn_target)
+    target = h5py.File(fn_target,'r')
+    target_mat = (target['/mats/matrix'][0,0,0,:,:,0] + \
+               1j*target['/mats/matrix'][0,0,0,:,:,1]).T
+    target.close()
+
+    chi_sc_at_iqsc = h5py.File(fn,'r')
+    chimat_sc_iqsc = chi_sc_at_iqsc['mats/matrix']
+    chimat_sc_iqsc = (chi_sc_at_iqsc['/mats/matrix'][0,0,0,:,:,0] + \
+                   1j*chi_sc_at_iqsc['/mats/matrix'][0,0,0,:,:,1]).T
+
+    chi_sc_at_iqsc.close()
+
+    subtract_mat = target_mat - chimat_sc_iqsc
+    print('\nconstructed')
+    print(chimat_sc_iqsc[0,0:20])
+    print('\ntarget')
+    print(target_mat[0,:20])
+    print('\n|subtract|')
+    print(np.abs(subtract_mat[0,:20]))
+    print('\nnp.max(subtract)')
+    print(np.max(np.abs(subtract_mat)))
+
+    return None
+
+def make_sc0_split(sc_eps_path, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
+    """
+    Add Chi_uc(quc, guc, qpuc) to Chi_sc(gsc,gscp) at iqsc
+
+    --INPUT--
+    sc_eps_path : string
+        path for splited chi_sc calculation
+
+    chi0_uc : Polarizability
+
+    chi_uc : Polarizability
+
+    qucG2qscg : int(nqsc,sc_size,nguc)
+
+    quc_map_iq : real(nqsc, size_sc)
+
+    """
+    ### LOAD DATA ###
+    iqsc = 0
+    fn = sc_eps_path + f'./Eps_{iqsc}/chi0mat.h5'
+    chi_sc_at_iqsc = h5py.File(fn,'r+',driver='mpio',comm=comm)
+    chimat_sc_iqsc = chi_sc_at_iqsc['mats/matrix']
+
+    # Needed qucG2qsc & quc_map_iq
+    if comm.rank == 0:
+        print('\nStart adding matrix elements\n')
+        print('\nWorking on ', fn)
+        print('\nNote, this is a special point q0sc')
+    qucG2qscg_tmp  = qucG2qscg[iqsc,:,:]
+    quc_map_iq_tmp = quc_map_iq[iqsc,:]
+    nquc_l         = len(quc_map_iq_tmp)
+
+    # Parallel setup
+    quc_map_iq_splited = np.array_split(quc_map_iq_tmp, comm.size)
+    iquc_tmp2iquc_l    = np.array_split(np.array(range(nquc_l)), comm.size)
+    if comm.rank == 0:
+        print(f'\nParallel over quc')
+        print(f'\nNumber of quc in the master processor: {len(quc_map_iq_splited[0])}')
+    # Start mapping iteration
+    #for iquc_l, iquc_g in enumerate(quc_map_iq_tmp):
+    comm.Barrier()
+    for iquc_tmp, iquc_g in enumerate(quc_map_iq_splited[comm.rank]):
+        iquc_l = iquc_tmp2iquc_l[comm.rank][iquc_tmp]
+        if comm.rank == 0:
+            print(f'iquc_l: {iquc_l} out of {nquc_l}')
+        if (iquc_l == 0) and (iquc_g == 0):
+            if comm.rank == 0:
+                print("We are constructing q0sc from q0uc!")
+            chimat_uc_iq = chi0_uc.get_mat_iq(iquc_g)
+            for iguc in range(chi0_uc.nmtx[iquc_g]):
+                for jguc in range(chi0_uc.nmtx[iquc_g]):
+                    igsc = qucG2qscg_tmp[iquc_l, iguc]
+                    jgsc = qucG2qscg_tmp[iquc_l, jguc]
+                    chimat_sc_iqsc[0, 0, 0, jgsc, igsc, 0] += np.real(chimat_uc_iq[iguc,jguc])
+                    chimat_sc_iqsc[0, 0, 0, jgsc, igsc, 1] += np.imag(chimat_uc_iq[iguc,jguc])
+        else:
+            chimat_uc_iq = chi_uc.get_mat_iq(iquc_g)
+            for iguc in range(chi_uc.nmtx[iquc_g]):
+                for jguc in range(chi_uc.nmtx[iquc_g]):
+                    igsc = qucG2qscg_tmp[iquc_l, iguc]
+                    jgsc = qucG2qscg_tmp[iquc_l, jguc]
+                    chimat_sc_iqsc[0, 0, 0, jgsc, igsc, 0] += np.real(chimat_uc_iq[iguc,jguc])
+                    chimat_sc_iqsc[0, 0, 0, jgsc, igsc, 1] += np.imag(chimat_uc_iq[iguc,jguc])
+    # End of mapping iteration
+    comm.Barrier()
+    chi_sc_at_iqsc.close()
+    if comm.rank == 0:
+        print('\nEnd of adding matrix elements\n')
+    return None
+
+def make_sc_split(iqsc, sc_eps_path, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
+    """
+    Add Chi_uc(quc, guc, qpuc) to Chi_sc(gsc,gscp) at iqsc
+
+    --INPUT--
+    iqsc : int
+        q-point index for sc. qsc0 correponding to 0
+
+    sc_eps_path : string
+        path for splited chi_sc calculation
+
+    chi0_uc : Polarizability
+
+    chi_uc : Polarizability
+
+    qucG2qscg : int(nqsc,sc_size,nguc)
+
+    quc_map_iq : real(nqsc, size_sc)
+
+    """
+    ### LOAD DATA ###
+    fn = sc_eps_path + f'./Eps_{iqsc}/chimat.h5'
+    chi_sc_at_iqsc = h5py.File(fn,'r+',driver='mpio',comm=comm)
+    chimat_sc_iqsc = chi_sc_at_iqsc['mats/matrix']
+
+    # Needed qucG2qsc & quc_map_iq
+    if comm.rank == 0:
+        print('\nStart adding matrix elements\n')
+        print('Working on ', fn)
+    qucG2qscg_tmp  = qucG2qscg[iqsc,:,:]
+    quc_map_iq_tmp = quc_map_iq[iqsc,:]
+    nquc_l         = len(quc_map_iq_tmp)
+
+    # Parallel setup
+    quc_map_iq_splited = np.array_split(quc_map_iq_tmp, comm.size)
+    iquc_tmp2iquc_l    = np.array_split(np.array(range(nquc_l)), comm.size)
+    if comm.rank == 0:
+        print(f'\nParallel over quc')
+        print(f'\nNumber of quc in the master processor: {len(quc_map_iq_splited[0])}')
+    # Start mapping iteration
+    comm.Barrier()
+    #for iquc_l, iquc_g in enumerate(quc_map_iq_tmp):
+    for iquc_tmp, iquc_g in enumerate(quc_map_iq_splited[comm.rank]):
+        iquc_l = iquc_tmp2iquc_l[comm.rank][iquc_tmp]
+        if comm.rank == 0:
+            print(f'iquc_l: {iquc_l} out of {nquc_l}')
+        chimat_uc_iq = chi_uc.get_mat_iq(iquc_g)
+        for iguc in range(chi_uc.nmtx[iquc_g]):
+            for jguc in range(chi_uc.nmtx[iquc_g]):
+                igsc = qucG2qscg_tmp[iquc_l, iguc]
+                jgsc = qucG2qscg_tmp[iquc_l, jguc]
+                chimat_sc_iqsc[0, 0, 0, jgsc, igsc, 0] += np.real(chimat_uc_iq[iguc,jguc])
+                chimat_sc_iqsc[0, 0, 0, jgsc, igsc, 1] += np.imag(chimat_uc_iq[iguc,jguc])
+    # End of mapping iteration
+    comm.Barrier()
+    chi_sc_at_iqsc.close()
+    if comm.rank == 0:
+        print('\nEnd of adding matrix elements\n')
+    return None
+
+def get_qpts_crys(fn_qpts_crys, containq0):
+    """
+    --INPUT--
+    fn_qpts_crys : string
+
+    containq0 : bool
+        exclude first element (=q0) if True
+
+    --OUTPUT--
+    qpts_crys : float(nqsc-1, 3)
+    """
+    qpts_crys = np.loadtxt(fn_qpts_crys, usecols=(0,1,2),dtype=np.float64)
+    if containq0:
+        return qpts_crys[1:,:]
+    else:
+        return qpts_crys
+
 
 def make_sc0(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
     """
@@ -319,7 +585,7 @@ def simple_hard_coding(chi0_uc, chi0_sc,chi_uc,chi_sc,quc_map_iq):
 
 
 
-def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
+def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq, TOL_SMALL=1e-5):
     """
     Get mapping indices from quc+G to qsc+g
     dat
@@ -336,13 +602,18 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
 
     quc_map_iq : real(nqsc, size_sc)
 
+    TOL_SMALL  : float64
+        Tolerance for distacne in 'sc_crys' unit
+        Bigger supercell requires higher TOL_SMALL
+
 
     --OUTPUT--
     qucG2qscg : int(nq_sc,sc_size,max(nmatx_uc))
         For a given quc+guc index in Chi_quc, return qsc+gsc index in Chi_qsc.
         Note, for a given qsc, we only consider 'relavant' quc in {quc: quc = qsc+gsc}.
     """
-    print('\nStart mapping quc+guc <-> qsc+gsc')
+    if comm.rank == 0:
+        print('\nStart mapping quc+guc <-> qsc+gsc')
     bvec_bohr_uc = chi_uc.bvec_bohr
     bvec_bohr_sc = chi_sc.bvec_bohr
     #print(chi_uc.nmtx)
@@ -365,8 +636,8 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
     # (b). q0sc <-> quc
     # (c). qsc  <-> quc
 
-
-    print("\n2-(a). q0sc <-> q0uc")
+    if comm.rank == 0:
+        print("\n2-(a). q0sc <-> q0uc")
     # Here, we find mapping between q0sc+gsc and q0uc+guc
     # Note, we q0sc/q0uc are exactly zero vector for mapping purpose!
     q0uc_bohr = chi0_uc.qpts_bohr[0] # We don't use ...
@@ -382,7 +653,7 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
         gsc_bohr = guc_bohr # + q0uc_bohr - q0sc_bohr
         gsc_crys = gsc_bohr@np.linalg.inv(bvec_bohr_sc) #should be int
         dist, igsc_lst = q0sc_tree.query([gsc_crys],k=1)
-        if dist[0] < 1e-8:
+        if dist[0] < TOL_SMALL:
             #print('dist[0]',dist[0])
             #print('igsc[0]',igsc[0])
             igsc = igsc_lst[0]
@@ -391,10 +662,13 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
             print('\n2-(a). q0sc <-> q0uc')
             print(f'Cannot find matched igsc for iguc: {iguc}')
             Error
-    print("2-(a). q0sc <-> q0uc Done")
+
+    if comm.rank == 0:
+        print("2-(a). q0sc <-> q0uc Done")
 
 
-    print("2-(b). q0sc <-> quc")
+    if comm.rank == 0:
+        print("2-(b). q0sc <-> quc")
     # Here, we need to deal with multiple quc=\=0
     # iquc_l represent a local quc index within given qsc
     # iquc_g represent a global quc index in 'chi_uc.qpts'
@@ -412,7 +686,7 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
                 gsc_bohr = guc_bohr + quc_bohr # - q0sc_bohr
                 gsc_crys = gsc_bohr@np.linalg.inv(bvec_bohr_sc) #should be int
                 dist, igsc_lst = q0sc_tree.query([gsc_crys],k=1)
-                if dist[0] < 1e-8:
+                if dist[0] < TOL_SMALL:
                     #print('dist[0]',dist[0])
                     #print('igsc[0]',igsc[0])
                     igsc = igsc_lst[0]
@@ -421,16 +695,21 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
                     print('\n2-(b). q0sc <-> quc')
                     print(f'Cannot find matched igsc for iguc: {iguc}')
                     Error
-    print("2-(b). q0sc <-> quc Done")
+
+    if comm.rank == 0:
+        print("2-(b). q0sc <-> quc Done")
     # 2-(b). q0sc <-> quc Done
 
 
-    print("2-(c). qsc <-> quc")
+    if comm.rank == 0:
+        print("2-(c). qsc <-> quc")
     # Here, we need to deal with multiple qsc=\=0, quc=\=0
     # iquc_l represent a local quc index within given qsca
     # iquc_g represent a global quc index in 'chi_uc.qpts'
     # Note! 'chi_uc.qpts' does not include qsc0
     for iqsc, qsc_bohr in enumerate(chi_sc.qpts_bohr):
+        if comm.rank == 0:
+            print(f"      *iqsc = {iqsc} out of {nqsc-1}")
         set_hklsc_q = chi_sc.components[chi_sc.gind_eps2rho[iqsc,:chi_sc.nmtx[iqsc]]-1]
         qsc_tree = KDTree(set_hklsc_q)
         # iqsc -> iqsc+1 in chi_sc bcz we don't have qsc0
@@ -443,17 +722,19 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
                 gsc_bohr = guc_bohr + quc_bohr - qsc_bohr
                 gsc_crys = gsc_bohr@np.linalg.inv(bvec_bohr_sc) #should be int
                 dist, igsc_lst = qsc_tree.query([gsc_crys],k=1)
-                if dist[0] < 1e-8:
+                if dist[0] < TOL_SMALL:
                     #print('dist[0]',dist[0])
                     #print('igsc[0]',igsc[0])
                     igsc = igsc_lst[0]
                     qucG2qscg[iqsc+1,iquc_l,iguc] = igsc
                 else:
-                    print('\n2-(c). q0sc <-> quc')
+                    print('\n2-(c). qsc <-> quc')
                     print(f'Cannot find matched igsc for iguc: {iguc}')
                     Error
-    print("2-(c). q0sc <-> quc Done")
-    #print(qucG2qscg)
+
+    if comm.rank == 0:
+        print("2-(c). qsc <-> quc Done")
+        print('\nEnd of mapping quc+guc <-> qsc+gsc')
 
 
     return qucG2qscg
@@ -475,26 +756,6 @@ def fold_qsc(iq, chi_sc, chi_uc, quc_map_crys):
 
 
 
-
-
-def gen_phi_sc(phi_uc, miller_uc, miller_sc, k_uc, k_sc, B_uc, B_sc, npol):
-    ngwx_uc = len(miller_uc)
-    ngwx_sc = len(miller_sc)
-    tree = KDTree(miller_sc)
-    phi_sc = zeros(len(miller_sc)*npol, dtype=complex64)
-    if npol == 1:
-        for igwx_uc, hkl_uc in enumerate(miller_uc):
-            g_uc = dot(hkl_uc, B_uc)
-            gauge_dif = g_uc + k_uc - k_sc
-            gauge_dif_hkl = dot(gauge_dif, linalg.inv(B_sc))
-            dist, igwx_sc = tree.query([gauge_dif_hkl],k=1)
-            if dist[0] < 1e-5:
-                phi_sc[igwx_sc[0]]=phi_uc[igwx_uc]
-                #print(miller_sc[igwx_sc[0]])
-                #print(gauge_dif_hkl)
-
-
-    return phi_sc
 
 if __name__ == '__main__':
     main()

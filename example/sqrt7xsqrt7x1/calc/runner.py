@@ -21,6 +21,7 @@ Generate Chi_sc(qsc,gsc,gscp) from Chi_uc(quc,guc,gucp)
 *TODO*
     1. input option for chi_uc.nmtx so that can change epscut for uc
     2. reading header part from seperate 'qsc'
+    3. construct Chi_sc seperately
 
 
 Written by W. Kim  Apr. 20. 2023
@@ -35,16 +36,32 @@ from typedef import Polarizability
 
 def main():
     sc_eps_path = '../sc/3.1-chi/'
+    #sc_eps_path = '../sc/3.1.1-chi_lowepscut/'
     uc_eps_path = '../uc/3.1-chi/'
-    chi0_sc = Polarizability.header_from_hdf5(fn_chimat=sc_eps_path+'./chi0mat.h5')
-    chi0_uc = Polarizability.header_from_hdf5(fn_chimat=uc_eps_path+'./chi0mat.h5')
+    chi0_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'./chi0mat.h5')
+    chi0_uc = Polarizability.from_hdf5(fn_chimat=uc_eps_path+'./chi0mat.h5')
+
     # For unfolding purpose we assume q0 = 0 exactly.
     chi0_uc.qpts_crys = np.array([[0.0,0.0,0.0]])
     chi0_uc.qpts_bohr = np.array([[0.0,0.0,0.0]])
     chi0_sc.qpts_crys = np.array([[0.0,0.0,0.0]])
     chi0_sc.qpts_bohr = np.array([[0.0,0.0,0.0]])
-    chi_sc = Polarizability.header_from_hdf5(fn_chimat=sc_eps_path+'./chimat.h5')
-    chi_uc = Polarizability.header_from_hdf5(fn_chimat=uc_eps_path+'./chimat.h5')
+    chi_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'./chimat.h5')
+    chi_uc = Polarizability.from_hdf5(fn_chimat=uc_eps_path+'./chimat.h5')
+    print(chi0_sc.avec_bohr)
+    print(chi0_uc.avec_bohr)
+    exit()
+
+    # Change nmtx
+    #chi_uc_nmtx = np.loadtxt('./chimat.nmtx.txt', dtype=np.int32)
+    #chi0_uc_nmtx = np.loadtxt('./chi0mat.nmtx.txt',dtype=np.int32)
+    #print("Change nmtx!")
+    #chi_uc.nmtx = chi_uc_nmtx
+    #print(chi0_uc.nmtx.shape)
+    #chi0_uc.nmtx = np.array([chi0_uc_nmtx])
+    #print(chi0_uc.nmtx.shape)
+    # Change nmtx
+
     #kuc_map_crys : real(nqsc, size_sc, 3)
     #have mapped k_uc in crystal_uc
     quc_map_crys = np.load('../sc/2.1-wfn/kuc_map_crys.npy')
@@ -56,17 +73,14 @@ def main():
     # Because the tree doesn't contain the quc0 so quc_map_iq[0,0] is not mapped now.
     # so we assume quc_map_iq[0,0] should corresponding to q0uc and put '0'
     quc_map_iq[0,0] = 0
-    simple_hard_coding(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
+    #simple_hard_coding(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
 
     qucG2qscg = get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq)
-    iqsc = 5
+    np.save('qucG2qscg_ref',qucG2qscg)
+    exit()
+    iqsc = 6
     test_mat   = make_sc(iqsc, chi_sc.get_mat_iq(iqsc-1), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
     #test_mat  = make_sc0(0, chi0_sc.get_mat_iq(0), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
-
-    chi_uc.close_h5()
-    chi_sc.close_h5()
-    chi0_uc.close_h5()
-    chi0_uc.close_h5()
     return None
 
 def make_sc0(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
@@ -96,7 +110,7 @@ def make_sc0(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
     """
 
     #chimat_sc_iq_ = np.zeros_like(target_mat)
-    dummy_h5 = h5py.File('../sc/3.1-chi/chi0mat_dummy.h5','r+')
+    dummy_h5 = h5py.File('../sc/3.1.1-chi_lowepscut/chi0mat_dummy.h5','r+')
     chimat_sc_iq = dummy_h5['mats/matrix']
     chimat_sc_iq[0, 0, 0, :, :, 1] = np.zeros_like(chimat_sc_iq[0, 0, 0, :, :, 1])
     chimat_sc_iq[0, 0, 0, :, :, 0] = np.zeros_like(chimat_sc_iq[0, 0, 0, :, :, 0])
@@ -167,7 +181,7 @@ def make_sc(iqsc, target_mat, chi0_uc, chi_uc, qucG2qscg, quc_map_iq):
         constructed chi_sc at iqsc
     """
     #chimat_sc_iq = np.zeros_like(target_mat)
-    dummy_h5 = h5py.File('../sc/3.1-chi/chimat_dummy.h5','r+')
+    dummy_h5 = h5py.File('../sc/3.1.1-chi_lowepscut/chimat_dummy.h5','r+')
     chimat_sc_iq = dummy_h5['mats/matrix']
     chimat_sc_iq[iqsc-1, 0, 0, :, :, 1] = np.zeros_like(chimat_sc_iq[iqsc-1, 0, 0, :, :, 1])
     chimat_sc_iq[iqsc-1, 0, 0, :, :, 0] = np.zeros_like(chimat_sc_iq[iqsc-1, 0, 0, :, :, 0])
@@ -386,7 +400,7 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
     print("2-(a). q0sc <-> q0uc Done")
 
 
-    print("2- (b). q0sc <-> quc")
+    print("2-(b). q0sc <-> quc")
     # Here, we need to deal with multiple quc=\=0
     # iquc_l represent a local quc index within given qsc
     # iquc_g represent a global quc index in 'chi_uc.qpts'
@@ -413,11 +427,11 @@ def get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq):
                     print('\n2-(b). q0sc <-> quc')
                     print(f'Cannot find matched igsc for iguc: {iguc}')
                     Error
-    print("2- (b). q0sc <-> quc Done")
+    print("2-(b). q0sc <-> quc Done")
     # 2-(b). q0sc <-> quc Done
 
 
-    print("2- (c). qsc <-> quc")
+    print("2-(c). qsc <-> quc")
     # Here, we need to deal with multiple qsc=\=0, quc=\=0
     # iquc_l represent a local quc index within given qsca
     # iquc_g represent a global quc index in 'chi_uc.qpts'
@@ -490,4 +504,3 @@ def gen_phi_sc(phi_uc, miller_uc, miller_sc, k_uc, k_sc, B_uc, B_sc, npol):
 
 if __name__ == '__main__':
     main()
-

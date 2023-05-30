@@ -21,6 +21,7 @@ Generate Chi_sc(qsc,gsc,gscp) from Chi_uc(quc,guc,gucp)
 *TODO*
     1. input option for chi_uc.nmtx so that can change epscut for uc
     2. reading header part from seperate 'qsc'
+    3. construct Chi_sc seperately
 
 
 Written by W. Kim  Apr. 20. 2023
@@ -34,10 +35,21 @@ from scipy.spatial import KDTree
 from typedef import Polarizability
 
 def main():
+    """
+    Required file
+    chi0mat.h5
+    chimat.h5
+    qpts_sc
+    kuc_map_crys.npy
+
+
+
+    """
     #sc_eps_path = '../sc/3.1-chi/'
-    sc_eps_path = '../sc/3.1.1-chi_lowepscut/'
+    sc_eps_path = '../sc/3.1-chi-separate/'
     uc_eps_path = '../uc/3.1-chi/'
-    chi0_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'./chi0mat.h5')
+    change_nmtx = False
+    chi0_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'Eps_0/chi0mat.h5')
     chi0_uc = Polarizability.from_hdf5(fn_chimat=uc_eps_path+'./chi0mat.h5')
 
     # For unfolding purpose we assume q0 = 0 exactly.
@@ -45,21 +57,25 @@ def main():
     chi0_uc.qpts_bohr = np.array([[0.0,0.0,0.0]])
     chi0_sc.qpts_crys = np.array([[0.0,0.0,0.0]])
     chi0_sc.qpts_bohr = np.array([[0.0,0.0,0.0]])
-    chi_sc = Polarizability.from_hdf5(fn_chimat=sc_eps_path+'./chimat.h5')
     chi_uc = Polarizability.from_hdf5(fn_chimat=uc_eps_path+'./chimat.h5')
-
+    # Read chi_sc header from splited calc.
+    qpts_crys = np.loadtxt('qpts_sc', usecols=(0,1,2),dtype=np.float64)
+    qpts_crys = qpts_crys[1:,:] # exclude q0sc
+    chi_sc = Polarizability.from_split(dirname=sc_eps_path,
+                                       qpts_crys_inp=qpts_crys)
     # Change nmtx
-    chi_uc_nmtx = np.loadtxt('./chimat.nmtx.txt', dtype=np.int32)
-    chi0_uc_nmtx = np.loadtxt('./chi0mat.nmtx.txt',dtype=np.int32)
-    print("Change nmtx!")
-    chi_uc.nmtx = chi_uc_nmtx
-    print(chi0_uc.nmtx.shape)
-    chi0_uc.nmtx = np.array([chi0_uc_nmtx])
-    print(chi0_uc.nmtx.shape)
+    if change_nmtx:
+        chi_uc_nmtx = np.loadtxt('./chimat.nmtx.txt', dtype=np.int32)
+        chi0_uc_nmtx = np.loadtxt('./chi0mat.nmtx.txt',dtype=np.int32)
+        print("Change nmtx!")
+        chi_uc.nmtx = chi_uc_nmtx
+        print(chi0_uc.nmtx.shape)
+        chi0_uc.nmtx = np.array([chi0_uc_nmtx])
+        print(chi0_uc.nmtx.shape)
     # Change nmtx
 
-    #kuc_map_crys : real(nqsc, size_sc, 3)
-    #have mapped k_uc in crystal_uc
+    # kuc_map_crys : real(nqsc, size_sc, 3)
+    # contains mapped k_uc in crystal_uc
     quc_map_crys = np.load('../sc/2.1-wfn/kuc_map_crys.npy')
     #nqsc, sc_size, _ = quc_map_crys.shape
     tree  = KDTree(chi_uc.qpts_crys)
@@ -72,6 +88,8 @@ def main():
     #simple_hard_coding(chi0_uc, chi0_sc,chi_uc, chi_sc, quc_map_crys)
 
     qucG2qscg = get_qucG2qscg(chi0_uc, chi_uc, chi0_sc, chi_sc, quc_map_iq)
+    np.save('qucG2qscg_test', qucG2qscg)
+    exit()
     iqsc = 6
     test_mat   = make_sc(iqsc, chi_sc.get_mat_iq(iqsc-1), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
     #test_mat  = make_sc0(0, chi0_sc.get_mat_iq(0), chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
