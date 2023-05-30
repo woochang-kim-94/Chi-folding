@@ -1,0 +1,63 @@
+TACC:  Starting up job 5405585 
+TACC:  Starting parallel tasks... 
+
+     Program PW2BGW v.7.0 starts on 19Apr2023 at 22:30:32 
+
+     This program is part of the open-source Quantum ESPRESSO suite
+     for quantum simulation of materials; please cite
+         "P. Giannozzi et al., J. Phys.:Condens. Matter 21 395502 (2009);
+         "P. Giannozzi et al., J. Phys.:Condens. Matter 29 465901 (2017);
+         "P. Giannozzi et al., J. Chem. Phys. 152 154105 (2020);
+          URL http://www.quantum-espresso.org", 
+     in publications or presentations arising from this work. More details at
+     http://www.quantum-espresso.org/quote
+
+     Parallel version (MPI & OpenMP), running on     144 processor cores
+     Number of MPI processes:               144
+     Threads/MPI process:                     1
+
+     MPI processes distributed on     3 nodes
+     K-points division:     npool     =       9
+     R & G space division:  proc/nbgrp/npool/nimage =      16
+     177581 MiB available memory on the printing compute node when the environment starts
+ 
+
+     Reading xml data from directory:
+
+     ./WS2.save/
+
+     IMPORTANT: XC functional enforced from input :
+     Exchange-correlation= PBE
+                           (   1   4   3   4   0   0   0)
+     Any further DFT definition will be discarded
+     Please, verify this is what you really want
+
+ 
+     Parallelization info
+     --------------------
+     sticks:   dense  smooth     PW     G-vecs:    dense   smooth      PW
+     Min          85      85     23                 7655     7655    1155
+     Max          86      86     24                 7668     7668    1170
+     Sum        1369    1369    379               122595   122595   18629
+ 
+     Using Slab Decomposition
+ 
+     Reading collected, re-writing distributed wavefunctions
+
+     NLCC is present
+
+     call write_wfng
+     done write_wfng
+
+ 
+     write_wfng   :      0.50s CPU      0.83s WALL (       1 calls)
+ 
+     PW2BGW       :      0.87s CPU      1.38s WALL
+
+ 
+   This run was terminated on:  22:30:33  19Apr2023            
+
+=------------------------------------------------------------------------------=
+   JOB DONE.
+=------------------------------------------------------------------------------=
+TACC:  Shutdown complete. Exiting. 

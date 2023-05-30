@@ -1,0 +1,49 @@
+
+CommandNotFoundError: Your shell has not been properly configured to use 'conda activate'.
+To initialize your shell, run
+
+    $ conda init <SHELL_NAME>
+
+Currently supported shells are:
+  - bash
+  - fish
+  - tcsh
+  - xonsh
+  - zsh
+  - powershell
+
+See 'conda init --help' for more information and options.
+
+IMPORTANT: You may need to close and restart your shell after running 'conda init'.
+
+
+Traceback (most recent call last):
+  File "/pscratch/sd/w/wkim94/Chi-folding/example/sqrt7xsqrt7x1/calc/./runner_q_parallel.py", line 803, in <module>
+Traceback (most recent call last):
+  File "/pscratch/sd/w/wkim94/Chi-folding/example/sqrt7xsqrt7x1/calc/./runner_q_parallel.py", line 803, in <module>
+    main()
+  File "/pscratch/sd/w/wkim94/Chi-folding/example/sqrt7xsqrt7x1/calc/./runner_q_parallel.py", line 142, in main
+    main()
+  File "/pscratch/sd/w/wkim94/Chi-folding/example/sqrt7xsqrt7x1/calc/./runner_q_parallel.py", line 142, in main
+    make_sc0_split(sc_eps_path, chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
+  File "/pscratch/sd/w/wkim94/Chi-folding/example/sqrt7xsqrt7x1/calc/./runner_q_parallel.py", line 226, in make_sc0_split
+    make_sc0_split(sc_eps_path, chi0_uc, chi_uc, qucG2qscg, quc_map_iq)
+  File "/pscratch/sd/w/wkim94/Chi-folding/example/sqrt7xsqrt7x1/calc/./runner_q_parallel.py", line 226, in make_sc0_split
+    chi_sc_at_iqsc = h5py.File(fn,'r+',driver='mpio',comm=comm)
+  File "/global/common/software/nersc/pm-2022q3/sw/python/3.9-anaconda-2021.11/lib/python3.9/site-packages/h5py/_hl/files.py", line 525, in __init__
+    chi_sc_at_iqsc = h5py.File(fn,'r+',driver='mpio',comm=comm)
+  File "/global/common/software/nersc/pm-2022q3/sw/python/3.9-anaconda-2021.11/lib/python3.9/site-packages/h5py/_hl/files.py", line 525, in __init__
+    fapl = make_fapl(driver, libver, rdcc_nslots, rdcc_nbytes, rdcc_w0,
+  File "/global/common/software/nersc/pm-2022q3/sw/python/3.9-anaconda-2021.11/lib/python3.9/site-packages/h5py/_hl/files.py", line 172, in make_fapl
+    fapl = make_fapl(driver, libver, rdcc_nslots, rdcc_nbytes, rdcc_w0,
+  File "/global/common/software/nersc/pm-2022q3/sw/python/3.9-anaconda-2021.11/lib/python3.9/site-packages/h5py/_hl/files.py", line 172, in make_fapl
+    set_fapl(plist, **kwds)
+  File "/global/common/software/nersc/pm-2022q3/sw/python/3.9-anaconda-2021.11/lib/python3.9/site-packages/h5py/_hl/files.py", line 53, in _set_fapl_mpio
+    set_fapl(plist, **kwds)
+  File "/global/common/software/nersc/pm-2022q3/sw/python/3.9-anaconda-2021.11/lib/python3.9/site-packages/h5py/_hl/files.py", line 53, in _set_fapl_mpio
+    raise ValueError("h5py was built without MPI support, can't use mpio driver")
+ValueError: h5py was built without MPI support, can't use mpio driver
+    raise ValueError("h5py was built without MPI support, can't use mpio driver")
+ValueError: h5py was built without MPI support, can't use mpio driver
+srun: error: nid007027: tasks 0-1: Exited with exit code 1
+srun: Terminating StepId=9692509.0

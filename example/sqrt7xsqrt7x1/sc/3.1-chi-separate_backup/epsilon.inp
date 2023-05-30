@@ -1,0 +1,8 @@
+epsilon_cutoff 2.0
+write_vcoul
+degeneracy_check_override
+cell_slab_truncation
+number_bands 119
+skip_epsilon
+
+begin qpoints
